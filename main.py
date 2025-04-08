@@ -59,11 +59,32 @@ class ChessGame:
         self.selected_square: Optional[chess.Square] = None
         self.highlighted_squares: List[chess.Square] = []
         self.human_turn = True  # True for white, False for black
+        self.human_color = chess.WHITE  # Default - will be set during new game
         self.ai_skill_level = DEFAULT_SKILL_LEVEL
         self.ai_rating = self.calculate_ai_rating(self.ai_skill_level)
         self.ai_thinking = False
         self.last_ai_move_time = 0
         self.move_in_progress = False
+        
+        # Move history navigation
+        self.viewing_history = False
+        self.history_position = 0
+        self.history_board = None
+        
+        # Color selection state
+        self.show_color_selection = False
+        self.color_selected = None
+        
+        # Hint system
+        self.hints_remaining = 0
+        self.max_hints = 3
+        self.show_hint_selection = False
+        self.hint_selected = False
+        self.hint_move = None
+        
+        # Game over animation
+        self.game_over_start_time = 0
+        self.game_over_phase = 0  # 0: None, 1: "CHECKMATE", 2: "YOU WIN/LOSE"
         
         # Initialize engine with error handling
         self.engine = None
@@ -95,12 +116,23 @@ class ChessGame:
         Returns:
             Calculated AI rating
         """
-        if skill_level < 5:
-            # For beginners, show a lower rating even though the engine isn't restricted
-            return 800 + (skill_level * 100)
+        if skill_level == 0:
+            # "Martin" level - complete beginner (like on chess.com)
+            return 300
+        elif skill_level == 1:
+            return 400
+        elif skill_level == 2:
+            return 500
+        elif skill_level == 3:
+            return 650
+        elif skill_level == 4:
+            return 800
+        elif skill_level < 10:
+            # Medium skill levels
+            return 900 + ((skill_level - 5) * 100)
         else:
-            # For skill level 5+, match the engine's calculation
-            return 1320 + ((skill_level - 5) * 75)
+            # Advanced skill levels (10-20)
+            return 1400 + ((skill_level - 10) * 150)
     
     def run(self) -> None:
         """Main game loop"""
@@ -117,9 +149,15 @@ class ChessGame:
             if event.type == pygame.QUIT:
                 self.quit()
                 
+            # Volume slider handling (for settings screen)
+            if self.game_mode == GAME_MODE_SETTINGS and hasattr(self.ui, 'volume_slider'):
+                self.ui.volume_slider.handle_event(event)
+                # Update actual volume when slider changes
+                self.audio.set_volume(self.ui.volume_slider.value)
+            
             # Handle mouse events
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Left click
-                self.handle_mouse_click(pygame.mouse.get_pos())
+                self.handle_mouse_click(event.pos)
                 
             # Handle keyboard events
             if event.type == pygame.KEYDOWN:
@@ -144,6 +182,47 @@ class ChessGame:
         Args:
             pos: (x, y) position of the click
         """
+        # Check for universal back button click first
+        if self.ui.universal_back_button.is_clicked(pos):
+            self.handle_back_button()
+            return
+        
+        # Move navigation buttons (only available during gameplay)
+        if self.game_mode == GAME_MODE_PLAY:
+            if self.ui.move_back_button.is_clicked(pos):
+                self.navigate_move_history(-1)  # Go back one move
+                return
+                
+            if self.ui.move_forward_button.is_clicked(pos):
+                self.navigate_move_history(1)  # Go forward one move
+                return
+        
+        # Color selection screen
+        if self.show_color_selection:
+            # Check for color selection buttons
+            if self.ui.white_button.is_clicked(pos):
+                self.start_game_with_color(chess.WHITE)
+            elif self.ui.black_button.is_clicked(pos):
+                self.start_game_with_color(chess.BLACK)
+            elif self.ui.random_button.is_clicked(pos):
+                # Randomly select a color
+                player_color = chess.WHITE if random.choice([True, False]) else chess.BLACK
+                self.start_game_with_color(player_color)
+            return
+        
+        # Hint selection screen
+        if self.show_hint_selection:
+            # Check for hint selection buttons
+            if self.ui.no_hints_button.is_clicked(pos):
+                self.set_hints(0)
+            elif self.ui.one_hint_button.is_clicked(pos):
+                self.set_hints(1)
+            elif self.ui.two_hints_button.is_clicked(pos):
+                self.set_hints(2)
+            elif self.ui.three_hints_button.is_clicked(pos):
+                self.set_hints(3)
+            return
+        
         # Menu screen click handling
         if self.game_mode == GAME_MODE_MENU:
             if self.ui.new_game_button.is_clicked(pos):
@@ -156,12 +235,14 @@ class ChessGame:
             elif self.ui.difficulty_up_button.is_clicked(pos):
                 # Increase difficulty (max 20)
                 self.ai_skill_level = min(20, self.ai_skill_level + 1)
+                self.engine.set_difficulty(self.ai_skill_level)
                 self.ai_rating = self.calculate_ai_rating(self.ai_skill_level)
             elif self.ui.difficulty_down_button.is_clicked(pos):
                 # Decrease difficulty (min 0)
                 self.ai_skill_level = max(0, self.ai_skill_level - 1)
+                self.engine.set_difficulty(self.ai_skill_level)
                 self.ai_rating = self.calculate_ai_rating(self.ai_skill_level)
-    
+        
         # Settings screen click handling
         elif self.game_mode == GAME_MODE_SETTINGS:
             # Theme buttons
@@ -169,7 +250,7 @@ class ChessGame:
                 if button.is_clicked(pos):
                     self.settings.set_theme(theme_name)
                     self.apply_settings()
-        
+            
             # Music toggle button
             if self.ui.music_toggle_button.is_clicked(pos):
                 current_state = self.settings.is_music_enabled()
@@ -179,29 +260,107 @@ class ChessGame:
                     self.start_background_music()
                 else:
                     self.audio.stop_music()
-        
+            
             # Back button
             if self.ui.back_button.is_clicked(pos):
                 # Return to previous mode (menu or game)
                 self.game_mode = self.previous_mode
-    
+        
         # Game result screen click handling
         elif self.game_mode == GAME_MODE_RESULT:
             if self.ui.menu_button.is_clicked(pos):
                 self.game_mode = GAME_MODE_MENU
-    
+        
         # Game screen click handling
         elif self.game_mode == GAME_MODE_PLAY:
+            # Skip if game over animation is in progress
+            if self.game_over_phase > 0:
+                return
+                
             # Check for in-game settings button
             if self.ui.in_game_settings_button.is_clicked(pos):
                 self.previous_mode = GAME_MODE_PLAY
                 self.game_mode = GAME_MODE_SETTINGS
                 return
             
+            # Check for hint button
+            if self.ui.hint_button.is_clicked(pos) and self.hints_remaining > 0 and self.human_turn:
+                self.show_hint()
+                return
+                
+            # Skip if not human's turn or move is in progress
+            if not self.human_turn or self.move_in_progress or self.ai_thinking:
+                return
+                
             # Check if position is on the board
             square = self.ui.pos_to_square(pos)
             if square is not None:
                 self.handle_board_click(square)
+    
+    def navigate_move_history(self, direction: int) -> None:
+        """
+        Navigate through the move history
+        
+        Args:
+            direction: -1 to go back, 1 to go forward
+        """
+        # First time entering history mode
+        if not self.viewing_history:
+            # Save the current board state
+            self.history_board = self.board.board.copy()
+            self.viewing_history = True
+            self.history_position = len(self.board.move_history)
+        
+        # Calculate new position
+        new_position = self.history_position + direction
+        
+        # Ensure new position is within valid range
+        if new_position < 0 or new_position > len(self.board.move_history):
+            return
+        
+        # Update history position
+        self.history_position = new_position
+        
+        # Reset the board to initial state
+        self.board.board = chess.Board()
+        
+        # Apply moves up to the history position
+        for i in range(self.history_position):
+            if i < len(self.board.move_history):
+                self.board.board.push(self.board.move_history[i])
+        
+        # Clear any selections and highlights
+        self.selected_square = None
+        self.highlighted_squares = []
+        
+        # If we've returned to the current position, exit history mode
+        if self.history_position == len(self.board.move_history):
+            self.viewing_history = False
+            self.board.board = self.history_board
+            self.history_board = None
+    
+    def handle_back_button(self) -> None:
+        """Handle universal back button clicks"""
+        if self.game_mode == GAME_MODE_SETTINGS:
+            # Return to previous mode (menu or game)
+            self.game_mode = self.previous_mode
+        elif self.game_mode == GAME_MODE_PLAY and self.viewing_history:
+            # Exit history view mode
+            self.viewing_history = False
+            self.board.board = self.history_board
+            self.history_board = None
+        elif self.game_mode == GAME_MODE_PLAY:
+            # Ask if user wants to return to menu
+            # For now, just go back to menu
+            self.game_mode = GAME_MODE_MENU
+        elif self.game_mode == GAME_MODE_RESULT:
+            self.game_mode = GAME_MODE_MENU
+        elif self.show_color_selection:
+            self.show_color_selection = False
+            self.game_mode = GAME_MODE_MENU
+        elif self.show_hint_selection:
+            self.show_hint_selection = False
+            self.show_color_selection = True
     
     def apply_settings(self) -> None:
         """Apply current settings to the game"""
@@ -228,19 +387,29 @@ class ChessGame:
         """Start playing background music based on settings"""
         if self.settings.is_music_enabled():
             music_dir = "assets/sounds/background_music"
-            music_file = self.settings.get_current_music()
-            full_path = os.path.join(music_dir, music_file)
             
-            if os.path.exists(full_path):
-                self.audio.play_music(full_path)
+            # Get all music files in the directory
+            music_files = []
+            for file in os.listdir(music_dir):
+                if file.endswith('.mp3') or file.endswith('.ogg') or file.endswith('.wav'):
+                    music_files.append(file)
+            
+            if music_files:
+                # Choose a random music file
+                random_music = random.choice(music_files)
+                full_path = os.path.join(music_dir, random_music)
+                
+                if os.path.exists(full_path):
+                    self.audio.play_music(full_path)
+                    print(f"Playing music: {random_music}")
     
     def handle_board_click(self, square: chess.Square) -> None:
         """Handle clicks on the chess board during gameplay"""
         # If no square is selected yet
         if self.selected_square is None:
             piece = self.board.board.piece_at(square)
-            # Only select squares with pieces of the current player's color
-            if piece and ((piece.color == chess.WHITE) == self.human_turn):
+            # Only select squares with pieces of the player's color and only during the player's turn
+            if piece and piece.color == self.human_color and self.human_turn:
                 self.selected_square = square
                 # Highlight legal moves
                 self.highlighted_squares = [
@@ -290,30 +459,22 @@ class ChessGame:
     
     def update(self) -> None:
         """Update game state"""
-        # Only update if in play mode
-        if self.game_mode != GAME_MODE_PLAY:
-            return
-        
         # Update animations
-        if self.ui.update_animations():
-            self.move_in_progress = True
-            return  # Don't process other updates while animating
-        else:
+        animation_complete = not self.ui.update_animations()
+        if animation_complete:
+            # If animations are finished, set move_in_progress to False
             self.move_in_progress = False
-        
-        # Check for game end conditions
-        if self.check_game_end():
-            return
-        
-        # Handle AI move if it's the AI's turn
-        if not self.human_turn and not self.move_in_progress:
-            # If AI is not yet thinking, start the move calculation
-            if not self.ai_thinking:
-                self.ai_thinking = True
-                self.last_ai_move_time = time.time()
-                self.engine.get_move(self.board.board, self.ai_skill_level)
-                return
             
+            # If it's AI's turn and AI is not already thinking, start AI move calculation
+            if not self.human_turn and not self.ai_thinking and not self.move_in_progress and self.game_mode == GAME_MODE_PLAY:
+                # If AI is not yet thinking, start the move calculation
+                if not self.ai_thinking:
+                    self.ai_thinking = True
+                    self.last_ai_move_time = time.time()
+                    self.engine.get_move(self.board.board, self.ai_skill_level)
+        
+        # If AI is thinking, check if move is ready
+        if self.ai_thinking and self.game_mode == GAME_MODE_PLAY:
             # Check if AI move is ready
             if self.engine.is_move_ready():
                 # Get the calculated move
@@ -325,6 +486,7 @@ class ChessGame:
                     
                     # Start animation for the move
                     self.ui.animate_move(ai_move, self.board.board)
+                    self.move_in_progress = True
                     
                     # Play move sound
                     self.audio.play("move")
@@ -339,24 +501,77 @@ class ChessGame:
                     
                     # Check for game end after AI move
                     self.check_game_end()
+
+        # Check for game over
+        if self.game_mode == GAME_MODE_PLAY:
+            # Get current game state dictionary
+            game_state_dict = self.board.get_game_state()
+            
+            # Check for endgame conditions
+            if game_state_dict['is_checkmate'] or game_state_dict['is_stalemate'] or game_state_dict['is_insufficient_material']:
+                # Record the time when game over was detected
+                if self.game_over_phase == 0:
+                    self.game_over_start_time = time.time()
+                    self.game_over_phase = 1  # Start with "CHECKMATE" animation
+                    
+                    if game_state_dict['is_checkmate']:
+                        # Play checkmate sound
+                        self.audio.play('checkmate')
+                    else:
+                        # Play draw sound
+                        self.audio.play('game_over')
+                
+                # Phase 1: Show CHECKMATE for 5 seconds
+                if self.game_over_phase == 1 and time.time() - self.game_over_start_time >= 5.0:
+                    self.game_over_phase = 2  # Switch to "YOU WIN/LOSE" animation
+                    self.game_over_start_time = time.time()  # Reset timer for next phase
+                
+                # Phase 2: Show YOU WIN/LOSE for 3 seconds
+                elif self.game_over_phase == 2 and time.time() - self.game_over_start_time >= 3.0:
+                    # Switch to result screen after animations
+                    self.game_over_phase = 0  # Reset for next game
+                    
+                    # Set result and message
+                    if game_state_dict['is_checkmate']:
+                        winner_color = chess.WHITE if self.board.board.outcome().winner else chess.BLACK
+                        winner_name = "White" if winner_color == chess.WHITE else "Black"
+                        player_won = (winner_color == self.human_color)
+                        self.game_result = "checkmate"
+                        self.game_result_message = f"You Win!" if player_won else "You Lose!"
+                    else:
+                        # It's a draw
+                        self.game_result = "draw"
+                        if game_state_dict['is_stalemate']:
+                            self.game_result_message = "Game Drawn by Stalemate"
+                        elif game_state_dict['is_insufficient_material']:
+                            self.game_result_message = "Game Drawn by Insufficient Material"
+                        else:
+                            self.game_result_message = "Game Drawn"
+                    
+                    self.game_mode = GAME_MODE_RESULT
     
     def check_game_end(self) -> bool:
         """Check if the game has ended"""
-        state = self.board.get_game_state()
+        # Get the game state (which is a dictionary, not a string)
+        state_dict = self.board.get_game_state()
         
-        if state == "checkmate" or state == "stalemate":
-            self.game_mode = GAME_MODE_RESULT
-            
-            if state == "checkmate":
-                winner = "Player" if not self.human_turn else "AI"
-                self.game_result = "win" if winner == "Player" else "loss"
-                self.game_result_message = f"Checkmate! {winner} wins."
-            else:
-                self.game_result = "draw"
-                self.game_result_message = "Stalemate! The game is a draw."
-            
+        # Check for game ending conditions
+        if state_dict['is_checkmate'] or state_dict['is_stalemate'] or state_dict['is_insufficient_material']:
+            # Start the game over animation sequence
+            if self.game_over_phase == 0:
+                self.game_over_start_time = time.time()
+                self.game_over_phase = 1  # Start with "CHECKMATE" animation
+                
+                if state_dict['is_checkmate']:
+                    # Play checkmate sound
+                    self.audio.play('checkmate')
+                else:
+                    # Play draw sound
+                    self.audio.play('game_over')
+        
+            # Let the update method handle the animation sequence
             return True
-        
+    
         return False
     
     def render(self) -> None:
@@ -366,7 +581,12 @@ class ChessGame:
         
         # Draw based on game mode
         if self.game_mode == GAME_MODE_MENU:
-            self.render_menu()
+            if self.show_color_selection:
+                self.render_color_selection()
+            elif self.show_hint_selection:
+                self.render_hint_selection()
+            else:
+                self.render_menu()
         elif self.game_mode == GAME_MODE_PLAY:
             self.render_game()
         elif self.game_mode == GAME_MODE_RESULT:
@@ -377,10 +597,21 @@ class ChessGame:
         # Update display
         pygame.display.flip()
 
-    def render_menu(self) -> None:
-        """Render the main menu"""
-        # Draw the menu UI with current theme
-        self.ui.draw_menu(self.screen, self.ai_skill_level, self.ai_rating, self.settings.get_theme())
+    def render_color_selection(self) -> None:
+        """Render the color selection screen"""
+        # Draw background with current theme
+        self.ui.draw_theme_background(self.screen, self.settings.get_theme())
+        
+        # Have the UI draw the color selection interface
+        self.ui.draw_color_selection(self.screen)
+
+    def render_hint_selection(self) -> None:
+        """Render the hint selection screen"""
+        # Draw background with current theme
+        self.ui.draw_theme_background(self.screen, self.settings.get_theme())
+        
+        # Have the UI draw the hint selection interface
+        self.ui.draw_hint_selection(self.screen)
 
     def render_game(self) -> None:
         """Render the game board and UI"""
@@ -393,8 +624,28 @@ class ChessGame:
             self.human_turn,
             self.ai_thinking,
             time.time() - self.last_ai_move_time if self.ai_thinking else 0,
-            self.settings.get_theme()
+            self.settings.get_theme(),
+            self.hints_remaining,
+            self.hint_move,
+            self.viewing_history
         )
+        
+        # Draw game over animation if in progress
+        if self.game_over_phase > 0:
+            if self.game_over_phase == 1:
+                # Draw CHECKMATE text overlay
+                self.ui.draw_checkmate_overlay(self.screen)
+            elif self.game_over_phase == 2:
+                # Draw WIN/LOSE text overlay
+                is_winner = False
+                if self.board.board.outcome():
+                    is_winner = (self.board.board.outcome().winner == self.human_color)
+                self.ui.draw_result_overlay(self.screen, is_winner)
+    
+    def render_menu(self) -> None:
+        """Render the main menu"""
+        # Draw the menu UI with current theme
+        self.ui.draw_menu(self.screen, self.ai_skill_level, self.ai_rating, self.settings.get_theme())
 
     def render_result(self) -> None:
         """Render the game result screen"""
@@ -414,27 +665,139 @@ class ChessGame:
     
     def new_game(self) -> None:
         """Start a new chess game"""
+        # Show color selection first
+        self.show_color_selection = True
+        self.show_hint_selection = False
+        self.color_selected = None
+        self.hint_selected = False
+    
+        # Disable other controls until selections are made
+        self.game_mode = GAME_MODE_MENU
+
+    def start_game_with_color(self, color: chess.Color) -> None:
+        """Start a new game with the selected color"""
         # Initialize a new board
         self.board = GameBoard()
+        
+        # Store player color and set initial turn
+        self.human_color = color
+        self.human_turn = (color == chess.WHITE)
+        
+        # Set the board orientation based on player color
+        # When playing as black, the board will be flipped so player's pieces are at the bottom
+        self.ui.set_board_orientation(color)
         
         # Reset game state
         self.selected_square = None
         self.highlighted_squares = []
-        self.human_turn = True  # Player starts as white
-        self.game_mode = GAME_MODE_PLAY
-        self.game_result = None
-        self.game_result_message = None
         self.move_in_progress = False
         self.ai_thinking = False
-        self.last_ai_move_time = time.time()
+        self.game_result = None
+        self.game_result_message = None
+        self.game_over_phase = 0
         
-        # Configure the engine with the current skill level
+        # Reset engine
         if self.engine:
             self.engine.set_difficulty(self.ai_skill_level)
         
-        # Play sound
-        self.audio.play('game_start')
-    
+        # Show hint selection
+        self.show_hint_selection = True
+        self.show_color_selection = False
+
+    def set_hints(self, num_hints: int) -> None:
+        """Set the number of hints available to the player"""
+        self.hints_remaining = num_hints
+        self.hint_selected = True
+        self.show_hint_selection = False
+        
+        # Start the actual game
+        self.game_mode = GAME_MODE_PLAY
+        
+        # Make AI move if AI plays first (player is black)
+        if not self.human_turn:
+            self.make_ai_move()
+
+    def show_hint(self) -> None:
+        """Show a hint by asking the engine for the best move"""
+        if not self.engine or not self.human_turn or self.hints_remaining <= 0:
+            return
+        
+        # Deselect any currently selected piece
+        self.selected_square = None
+        
+        # Clear any previous hints
+        self.hint_move = None
+        self.highlighted_squares = []
+        
+        # Start the engine calculation
+        self.engine.get_move(self.board.board, self.ai_skill_level)
+        
+        # We need to wait for the move calculation to complete
+        # This is a simplified synchronous approach for hints
+        waiting_start = time.time()
+        waiting_timeout = 1.0  # Maximum waiting time for a hint (in seconds)
+        
+        # Wait for the move calculation to complete or timeout
+        while not self.engine.is_move_ready() and time.time() - waiting_start < waiting_timeout:
+            # Check for pygame events while waiting to keep the UI responsive
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.quit()
+        
+            # Brief pause to prevent CPU hogging
+            time.sleep(0.05)
+
+        # Check if we got a move within the timeout
+        if self.engine.is_move_ready():
+            # Get the calculated best move
+            best_move = self.engine.get_calculated_move()
+            
+            if best_move:
+                self.hint_move = best_move
+                self.hints_remaining -= 1
+                
+                # Highlight hint move
+                self.highlighted_squares = [best_move.from_square, best_move.to_square]
+                self.audio.play('move')  # Play hint sound
+        else:
+            print("Hint calculation timed out")
+
+    def make_ai_move(self) -> None:
+        """Make a move with the AI"""
+        # If AI is not yet thinking, start the move calculation
+        if not self.ai_thinking:
+            self.ai_thinking = True
+            self.last_ai_move_time = time.time()
+            self.engine.get_move(self.board.board, self.ai_skill_level)
+            return
+        
+        # Check if AI move is ready
+        if self.engine.is_move_ready():
+            # Get the calculated move
+            ai_move = self.engine.get_calculated_move()
+            
+            if ai_move:
+                # Make the move on the board
+                self.board.make_move(ai_move)
+                
+                # Start animation for the move
+                self.ui.animate_move(ai_move, self.board.board)
+                self.move_in_progress = True
+                
+                # Play move sound
+                self.audio.play("move")
+                
+                # Switch back to human turn
+                self.human_turn = True
+                self.ai_thinking = False
+                
+                # Clear any previous selection
+                self.selected_square = None
+                self.highlighted_squares = []
+                
+                # Check for game end after AI move
+                self.check_game_end()
+
     def quit(self) -> None:
         """Clean up resources and exit the game"""
         # Close engine

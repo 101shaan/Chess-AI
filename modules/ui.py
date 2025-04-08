@@ -174,16 +174,27 @@ class Animation:
         return (x + SQUARE_SIZE // 2, y + SQUARE_SIZE // 2)
 
 class ChessUI:
-    def __init__(self) -> None:
-        """Initialize the Chess UI"""
+    """Chess game UI handler"""
+    
+    def __init__(self):
+        """Initialize the UI"""
+        # Initialize pygame fonts
+        pygame.font.init()
+        
+        # Board flipping flag - determines if board should be flipped (when playing as black)
+        self.board_flipped = False
+        
+        # Create fonts
+        self.title_font = pygame.font.SysFont("Arial", 36)
+        self.menu_font = pygame.font.SysFont("Arial", 24)
+        self.small_font = pygame.font.SysFont("Arial", 16)
+        self.huge_font = pygame.font.SysFont("Arial", 48)
+        
         # Load piece images
         self.piece_images = self.load_pieces()
         
         # Load background images
         self.background_images = self.load_backgrounds()
-        
-        # Text rendering
-        pygame.font.init()
         
         # Piece animations
         self.animations: List[Animation] = []
@@ -192,6 +203,7 @@ class ChessUI:
         self.large_font = pygame.font.SysFont("Arial", FONT_SIZE_LARGE)
         self.medium_font = pygame.font.SysFont("Arial", FONT_SIZE_MEDIUM)
         self.small_font = pygame.font.SysFont("Arial", FONT_SIZE_SMALL)
+        self.huge_font = pygame.font.SysFont("Arial", 48)  # For checkmate/win overlays
         
         # Calculate button positions
         center_x = WINDOW_WIDTH // 2
@@ -199,10 +211,40 @@ class ChessUI:
         button_height = 50
         button_spacing = 20
         
-        # Main menu buttons
+        # Universal back button (appears in all screens)
+        self.universal_back_button = Button(
+            10,  # Left side of screen
+            10,  # Top of screen
+            80,  # Smaller width
+            30,  # Smaller height
+            "Back",
+            font_size=16
+        )
+        
+        # Move history navigation buttons
+        nav_button_size = 40
+        self.move_back_button = Button(
+            BOARD_OFFSET_X,
+            BOARD_OFFSET_Y + BOARD_SIZE + 10,
+            nav_button_size,
+            nav_button_size,
+            "←",
+            font_size=20
+        )
+        
+        self.move_forward_button = Button(
+            BOARD_OFFSET_X + nav_button_size + 10,
+            BOARD_OFFSET_Y + BOARD_SIZE + 10,
+            nav_button_size,
+            nav_button_size,
+            "→",
+            font_size=20
+        )
+        
+        # Main menu buttons - Adjusted positions for better spacing
         self.new_game_button = Button(
             center_x - button_width // 2,
-            200,
+            150,
             button_width,
             button_height,
             "New Game"
@@ -210,7 +252,7 @@ class ChessUI:
         
         self.settings_button = Button(
             center_x - button_width // 2,
-            200 + button_height + button_spacing,
+            150 + button_height + button_spacing,
             button_width,
             button_height,
             "Settings"
@@ -218,7 +260,7 @@ class ChessUI:
         
         self.quit_button = Button(
             center_x - button_width // 2,
-            200 + (button_height + button_spacing) * 2,
+            150 + (button_height + button_spacing) * 2,
             button_width,
             button_height,
             "Quit"
@@ -228,7 +270,7 @@ class ChessUI:
         small_button_size = 40
         self.difficulty_up_button = Button(
             center_x + 100,
-            300,
+            350,  # Moved down below quit button
             small_button_size,
             small_button_size,
             "+"
@@ -236,10 +278,78 @@ class ChessUI:
         
         self.difficulty_down_button = Button(
             center_x - 100 - small_button_size,
-            300,
+            350,  # Moved down below quit button
             small_button_size,
             small_button_size,
             "-"
+        )
+        
+        # Color selection buttons
+        self.white_button = Button(
+            center_x - button_width // 2,
+            180,
+            button_width,
+            button_height,
+            "Play as White"
+        )
+        
+        self.black_button = Button(
+            center_x - button_width // 2,
+            180 + button_height + button_spacing,
+            button_width,
+            button_height,
+            "Play as Black"
+        )
+        
+        self.random_button = Button(
+            center_x - button_width // 2,
+            180 + (button_height + button_spacing) * 2,
+            button_width,
+            button_height,
+            "Random Color"
+        )
+        
+        # Hint selection buttons
+        self.no_hints_button = Button(
+            center_x - button_width // 2,
+            180,
+            button_width,
+            button_height,
+            "No Hints"
+        )
+        
+        self.one_hint_button = Button(
+            center_x - button_width // 2,
+            180 + button_height + button_spacing,
+            button_width,
+            button_height,
+            "1 Hint"
+        )
+        
+        self.two_hints_button = Button(
+            center_x - button_width // 2,
+            180 + (button_height + button_spacing) * 2,
+            button_width,
+            button_height,
+            "2 Hints"
+        )
+        
+        self.three_hints_button = Button(
+            center_x - button_width // 2,
+            180 + (button_height + button_spacing) * 3,
+            button_width,
+            button_height,
+            "3 Hints"
+        )
+        
+        # In-game hint button
+        self.hint_button = Button(
+            BOARD_OFFSET_X + BOARD_SIZE + 20,
+            400,
+            120,
+            40,
+            "Hint",
+            font_size=20
         )
         
         # Settings screen buttons
@@ -297,40 +407,40 @@ class ChessUI:
         """Load chess piece images from assets folder"""
         pieces = {}
         try:
-            # Define the mapping between chess notation and filenames
-            piece_mapping = {
-                'P': 'pawn',
-                'N': 'knight',
-                'B': 'bishop',
-                'R': 'rook',
-                'Q': 'queen',
-                'K': 'king'
-            }
-            
-            color_mapping = {
-                'w': 'white',
-                'b': 'black'
-            }
-            
-            # Check if assets directory exists
+            # Get asset directory
             pieces_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "pieces")
-            if not os.path.exists(pieces_dir):
-                print(f"Warning: pieces directory not found at {pieces_dir}")
-                return pieces
+            
+            # Direct mapping to python-chess notation
+            # The image filenames are incorrect - "white_X" images are actually black pieces and vice versa
+            piece_files = {
+                # White pieces (uppercase in python-chess) - using the "black_" images which actually show white pieces
+                'P': os.path.join(pieces_dir, "black_pawn.png"),
+                'N': os.path.join(pieces_dir, "black_knight.png"),
+                'B': os.path.join(pieces_dir, "black_bishop.png"),
+                'R': os.path.join(pieces_dir, "black_rook.png"),
+                'Q': os.path.join(pieces_dir, "black_queen.png"),
+                'K': os.path.join(pieces_dir, "black_king.png"),
                 
-            for color_code, color_name in color_mapping.items():
-                for piece_code, piece_name in piece_mapping.items():
-                    key = color_code + piece_code
-                    file_path = os.path.join(pieces_dir, f"{color_name}_{piece_name}.png")
+                # Black pieces (lowercase in python-chess) - using the "white_" images which actually show black pieces
+                'p': os.path.join(pieces_dir, "white_pawn.png"),
+                'n': os.path.join(pieces_dir, "white_knight.png"),
+                'b': os.path.join(pieces_dir, "white_bishop.png"),
+                'r': os.path.join(pieces_dir, "white_rook.png"),
+                'q': os.path.join(pieces_dir, "white_queen.png"),
+                'k': os.path.join(pieces_dir, "white_king.png")
+            }
+            
+            # Load each piece image
+            for symbol, file_path in piece_files.items():
+                if os.path.exists(file_path):
+                    # Load and scale image to fit square
+                    img = pygame.image.load(file_path)
+                    pieces[symbol] = pygame.transform.scale(
+                        img, (SQUARE_SIZE - 10, SQUARE_SIZE - 10)
+                    )
+                else:
+                    print(f"Warning: Piece image {file_path} not found")
                     
-                    if os.path.exists(file_path):
-                        # Load and scale image to fit square
-                        img = pygame.image.load(file_path)
-                        pieces[key] = pygame.transform.scale(
-                            img, (SQUARE_SIZE - 10, SQUARE_SIZE - 10)
-                        )
-                    else:
-                        print(f"Warning: Piece image {file_path} not found")
         except Exception as e:
             print(f"Error loading piece images: {e}")
             
@@ -385,6 +495,12 @@ class ChessUI:
         file_idx = chess.square_file(square)  # 0-7 (a-h)
         rank_idx = chess.square_rank(square)  # 0-7 (1-8)
         
+        # Handle board flipping when playing as black
+        if self.board_flipped:
+            # Flip both file and rank when board is flipped
+            file_idx = 7 - file_idx
+            rank_idx = 7 - rank_idx
+        
         # Convert to screen coordinates
         x = BOARD_OFFSET_X + (file_idx * SQUARE_SIZE)
         y = BOARD_OFFSET_Y + ((7 - rank_idx) * SQUARE_SIZE)  # Flip rank for drawing
@@ -410,16 +526,23 @@ class ChessUI:
         file_idx = (pos[0] - BOARD_OFFSET_X) // SQUARE_SIZE
         rank_idx = 7 - ((pos[1] - BOARD_OFFSET_Y) // SQUARE_SIZE)  # Flip rank for chess coordinates
         
+        # Handle board flipping when playing as black
+        if self.board_flipped:
+            # Flip both file and rank when board is flipped
+            file_idx = 7 - file_idx
+            rank_idx = 7 - rank_idx
+        
         # Create and return square
         return chess.square(file_idx, rank_idx)
     
-    def draw_board(self, surface: pygame.Surface, board_state: Any) -> None:
+    def draw_board(self, surface: pygame.Surface, board_state: Any, current_theme: str = "default") -> None:
         """
         Draw the chess board with pieces and highlights
         
         Args:
             surface: Pygame surface to draw on
             board_state: GameBoard object containing the chess state
+            current_theme: Current theme name
         """
         # Import THEMES and current theme for proper square coloring
         from modules.settings import THEMES
@@ -497,7 +620,9 @@ class ChessUI:
         """
         # Draw file labels (a-h) at the bottom
         for file in range(8):
-            label = chr(ord('a') + file)
+            # Adjust the file index when board is flipped
+            display_file = 7 - file if self.board_flipped else file
+            label = chr(ord('a') + display_file)
             text = self.small_font.render(label, True, COLOR_TEXT)
             
             # Position below the board squares
@@ -511,7 +636,9 @@ class ChessUI:
         
         # Draw rank labels (1-8) on the left
         for rank in range(8):
-            label = str(8 - rank)
+            # Adjust the rank label when board is flipped
+            display_rank = rank + 1 if self.board_flipped else 8 - rank
+            label = str(display_rank)
             text = self.small_font.render(label, True, COLOR_TEXT)
             
             # Position to the left of the board squares
@@ -534,8 +661,8 @@ class ChessUI:
         
         # Mapping from python-chess piece symbols to our notation
         piece_map = {
-            'P': 'wP', 'N': 'wN', 'B': 'wB', 'R': 'wR', 'Q': 'wQ', 'K': 'wK',
-            'p': 'bP', 'n': 'bN', 'b': 'bB', 'r': 'bR', 'q': 'bQ', 'k': 'bK'
+            'P': 'P', 'N': 'N', 'B': 'B', 'R': 'R', 'Q': 'Q', 'K': 'K',
+            'p': 'p', 'n': 'n', 'b': 'b', 'r': 'r', 'q': 'q', 'k': 'k'
         }
         
         # Draw each piece
@@ -548,18 +675,21 @@ class ChessUI:
             if piece:
                 # Get piece symbol and convert to our notation
                 symbol = piece.symbol()
-                key = piece_map.get(symbol)
                 
-                if key in self.piece_images:
-                    # Calculate position
-                    pos = self.square_to_coords(square)
+                # Direct mapping - this solves the piece color issue
+                if symbol in piece_map:
+                    key = piece_map[symbol]
                     
-                    # Center the piece on the square
-                    img = self.piece_images[key]
-                    img_rect = img.get_rect(center=(pos[0] + SQUARE_SIZE // 2, pos[1] + SQUARE_SIZE // 2))
-                    surface.blit(img, img_rect)
-                else:
-                    print(f"Warning: Missing piece image for {key}")
+                    if key in self.piece_images:
+                        # Calculate position
+                        pos = self.square_to_coords(square)
+                        
+                        # Center the piece on the square
+                        img = self.piece_images[key]
+                        img_rect = img.get_rect(center=(pos[0] + SQUARE_SIZE // 2, pos[1] + SQUARE_SIZE // 2))
+                        surface.blit(img, img_rect)
+                    else:
+                        print(f"Warning: Missing piece image for {key}")
     
     def is_piece_animating(self, square: chess.Square) -> bool:
         """Check if a piece on a square is currently being animated"""
@@ -576,8 +706,8 @@ class ChessUI:
         
         # Mapping from python-chess piece symbols to our notation
         piece_map = {
-            'P': 'wP', 'N': 'wN', 'B': 'wB', 'R': 'wR', 'Q': 'wQ', 'K': 'wK',
-            'p': 'bP', 'n': 'bN', 'b': 'bB', 'r': 'bR', 'q': 'bQ', 'k': 'bK'
+            'P': 'P', 'N': 'N', 'B': 'B', 'R': 'R', 'Q': 'Q', 'K': 'K',
+            'p': 'p', 'n': 'n', 'b': 'b', 'r': 'r', 'q': 'q', 'k': 'k'
         }
         
         # Draw each animated piece
@@ -636,35 +766,46 @@ class ChessUI:
     
     def draw_highlights(self, surface: pygame.Surface, 
                         selected_square: Optional[chess.Square], 
-                        highlighted_squares: List[chess.Square]) -> None:
-        """Draw highlights for selected square and legal moves"""
-        # Highlight selected square
+                        highlighted_squares: List[chess.Square],
+                        hint_move: Optional[chess.Move] = None) -> None:
+        """
+        Draw move highlights on the board
+        
+        Args:
+            surface: Pygame surface to draw on
+            selected_square: Currently selected square
+            highlighted_squares: Legal move squares to highlight
+            hint_move: Optional hint move to highlight differently
+        """
+        # Draw selected square highlight
         if selected_square is not None:
-            pos = self.square_to_coords(selected_square)
-            selected_rect = pygame.Rect(
-                pos[0],
-                pos[1],
-                SQUARE_SIZE, SQUARE_SIZE
-            )
+            x, y = self.square_to_coords(selected_square)
+            selected_rect = pygame.Rect(x, y, SQUARE_SIZE, SQUARE_SIZE)
             
+            # Create semi-transparent highlight
             highlight = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
             highlight.fill(COLOR_SELECTED)
             surface.blit(highlight, selected_rect)
         
-        # Highlight legal move targets
+        # Draw legal move indicators (circles)
         for square in highlighted_squares:
-            pos = self.square_to_coords(square)
+            if square == selected_square:
+                continue  # Skip selected square
             
-            # Calculate center of square
-            center_x = pos[0] + SQUARE_SIZE // 2
-            center_y = pos[1] + SQUARE_SIZE // 2
+            # Get coordinates
+            x, y = self.square_to_coords(square)
             
-            # Draw a circle in the center of the square
+            # Determine if this is a hint move square
+            is_hint = hint_move and (square == hint_move.from_square or square == hint_move.to_square)
+            
+            # Draw centered circle for legal move
+            circle_color = (255, 255, 0) if not is_hint else (0, 200, 0)  # Yellow for normal, green for hint
+            circle_center = (x + SQUARE_SIZE // 2, y + SQUARE_SIZE // 2)
             circle_radius = SQUARE_SIZE // 4
-            pygame.draw.circle(surface, COLOR_MOVE_INDICATOR, (center_x, center_y), circle_radius)
             
-            # Draw a border around the circle for better visibility
-            pygame.draw.circle(surface, (50, 50, 0), (center_x, center_y), circle_radius, 2)
+            # Draw circle with border for better visibility
+            pygame.draw.circle(surface, (0, 0, 0), circle_center, circle_radius + 2)  # Black border
+            pygame.draw.circle(surface, circle_color, circle_center, circle_radius)    # Yellow/green fill
     
     def animate_move(self, move: chess.Move, board: chess.Board) -> None:
         """Start a new piece animation for a move"""
@@ -752,7 +893,8 @@ class ChessUI:
                   selected_square: Optional[chess.Square], 
                   highlighted_squares: List[chess.Square],
                   human_turn: bool, ai_thinking: bool, thinking_time: float,
-                  current_theme: str = "default") -> None:
+                  current_theme: str = "default", hints_remaining: int = 0,
+                  hint_move: Optional[chess.Move] = None, viewing_history: bool = False) -> None:
         """
         Draw the complete game interface
         
@@ -765,18 +907,22 @@ class ChessUI:
             ai_thinking: True if AI is calculating
             thinking_time: Time AI has been thinking
             current_theme: Current theme name
+            hints_remaining: Number of hints remaining
+            hint_move: Current hint move to highlight
+            viewing_history: Whether viewing move history
         """
         # Draw theme background
         self.draw_theme_background(surface, current_theme)
         
         # Draw the chess board and pieces
-        self.draw_board(surface, board_state)
+        self.draw_board(surface, board_state, current_theme=current_theme)
         
         # Draw highlighted squares for selection
         self.draw_highlights(
             surface, 
             selected_square, 
-            highlighted_squares
+            highlighted_squares,
+            hint_move
         )
         
         # Draw animated pieces on top
@@ -793,7 +939,8 @@ class ChessUI:
             turn_surface.get_width() + 10,
             turn_surface.get_height() + 5
         )
-        pygame.draw.rect(surface, COLOR_BACKGROUND, text_bg)
+        pygame.draw.rect(surface, COLOR_BUTTON, text_bg)
+        pygame.draw.rect(surface, (50, 50, 50), text_bg, 1)
         surface.blit(turn_surface, (BOARD_OFFSET_X + BOARD_SIZE + 25, BOARD_OFFSET_Y + 2))
         
         # Draw captured pieces
@@ -801,13 +948,39 @@ class ChessUI:
         
         # Draw AI info if AI is thinking
         if ai_thinking:
-            thinking_time = thinking_time
             self.draw_thinking_indicator(surface, thinking_time)
         
         # Draw settings button in-game
         mouse_pos = pygame.mouse.get_pos()
         self.in_game_settings_button.update(mouse_pos)
         self.in_game_settings_button.draw(surface)
+        
+        # Draw hint button and count if hints are available
+        if hints_remaining > 0:
+            # Update hint button label to show remaining count
+            self.hint_button.update_text(f"Hint ({hints_remaining})")
+            self.hint_button.update(mouse_pos)
+            self.hint_button.draw(surface)
+        
+        # Draw move history navigation buttons
+        self.move_back_button.update(mouse_pos)
+        self.move_back_button.draw(surface)
+        
+        self.move_forward_button.update(mouse_pos)
+        self.move_forward_button.draw(surface)
+        
+        # Draw universal back button
+        self.universal_back_button.update(mouse_pos)
+        self.universal_back_button.draw(surface)
+        
+        # Draw viewing history message if in history mode
+        if viewing_history:
+            history_msg = self.medium_font.render("Viewing History", True, (220, 150, 50))
+            msg_rect = history_msg.get_rect(center=(WINDOW_WIDTH // 2, 30))
+            pygame.draw.rect(surface, (40, 40, 40), 
+                            (msg_rect.left - 10, msg_rect.top - 5, 
+                            msg_rect.width + 20, msg_rect.height + 10))
+            surface.blit(history_msg, msg_rect)
     
     def draw_settings(self, surface: pygame.Surface, settings_manager, return_to_game: bool = False) -> None:
         """
@@ -904,8 +1077,31 @@ class ChessUI:
         self.music_toggle_button.update(mouse_pos)
         self.music_toggle_button.draw(surface)
         
-        # Update back button position
-        self.back_button.rect.y = music_button_y + 60
+        # Create volume slider if it doesn't exist
+        if not hasattr(self, 'volume_slider'):
+            slider_width = 150
+            slider_height = 15
+            slider_x = WINDOW_WIDTH // 2 - slider_width // 2
+            slider_y = music_button_y + 50
+            self.volume_slider = VolumeSlider(slider_x, slider_y, slider_width, slider_height)
+        
+        # Only show volume slider if music is enabled
+        if settings_manager.is_music_enabled():
+            # Draw volume label
+            volume_label = self.small_font.render("Volume", True, COLOR_TEXT)
+            surface.blit(volume_label, (self.volume_slider.rect.centerx - volume_label.get_width() // 2, 
+                                      self.volume_slider.rect.top - 25))
+            
+            # Draw volume slider
+            self.volume_slider.draw(surface)
+            
+            # Draw volume percentage
+            volume_text = self.small_font.render(f"{int(self.volume_slider.value * 100)}%", True, COLOR_TEXT)
+            surface.blit(volume_text, (self.volume_slider.rect.centerx - volume_text.get_width() // 2, 
+                                      self.volume_slider.rect.bottom + 10))
+        
+        # Update back button position - ensure it's always visible
+        self.back_button.rect.y = music_button_y + (120 if settings_manager.is_music_enabled() else 70)
         
         # Update back button text based on where we should return to
         back_text = "Back to Game" if return_to_game else "Back to Menu"
@@ -913,20 +1109,9 @@ class ChessUI:
         self.back_button.update(mouse_pos)
         self.back_button.draw(surface)
         
-        # Draw help text with background
-        help_text = self.small_font.render("Choose a theme and toggle music", True, COLOR_TEXT)
-        help_width = help_text.get_width() + 20
-        help_height = help_text.get_height() + 10
-        help_x = WINDOW_WIDTH // 2 - help_width // 2
-        help_y = self.music_toggle_button.rect.bottom + 20
-        
-        pygame.draw.rect(surface, COLOR_BUTTON, 
-                        (help_x, help_y, help_width, help_height))
-        pygame.draw.rect(surface, (50, 50, 50), 
-                        (help_x, help_y, help_width, help_height), 1)
-        
-        surface.blit(help_text, (WINDOW_WIDTH // 2 - help_text.get_width() // 2, 
-                               help_y + 5))
+        # Draw universal back button
+        self.universal_back_button.update(mouse_pos)
+        self.universal_back_button.draw(surface)
     
     def draw_captured_pieces(self, surface: pygame.Surface, board_state: Any) -> None:
         """Draw captured pieces on the side of the board"""
@@ -963,8 +1148,8 @@ class ChessUI:
         for i, piece in enumerate(black_captures):
             # Make sure we're only showing black pieces here (pieces captured by white player)
             if piece.color == chess.BLACK:
-                piece_key = PIECE_MAPPING.get(piece.symbol().lower(), None)
-                if piece_key and piece_key in self.piece_images:
+                piece_key = 'p' if piece.symbol().lower() == 'p' else piece.symbol().lower()
+                if piece_key in self.piece_images:
                     # Scale down for captured piece display
                     small_piece = pygame.transform.scale(
                         self.piece_images[piece_key], 
@@ -982,8 +1167,8 @@ class ChessUI:
         for i, piece in enumerate(white_captures):
             # Make sure we're only showing white pieces here (pieces captured by black player)
             if piece.color == chess.WHITE:
-                piece_key = PIECE_MAPPING.get(piece.symbol().upper(), None)
-                if piece_key and piece_key in self.piece_images:
+                piece_key = 'P' if piece.symbol().upper() == 'P' else piece.symbol().upper()
+                if piece_key in self.piece_images:
                     # Scale down for captured piece display
                     small_piece = pygame.transform.scale(
                         self.piece_images[piece_key], 
@@ -1088,6 +1273,10 @@ class ChessUI:
         mouse_pos = pygame.mouse.get_pos()
         self.menu_button.update(mouse_pos)
         self.menu_button.draw(surface)
+        
+        # Draw universal back button
+        self.universal_back_button.update(mouse_pos)
+        self.universal_back_button.draw(surface)
     
     def draw_thinking_indicator(self, surface: pygame.Surface, thinking_time: float) -> None:
         """Draw an animated 'thinking' indicator while AI is calculating"""
@@ -1117,3 +1306,176 @@ class ChessUI:
         # If the theme has a background image, draw it
         if theme in self.background_images and self.background_images[theme] is not None:
             surface.blit(self.background_images[theme], (0, 0))
+    
+    def draw_color_selection(self, surface: pygame.Surface) -> None:
+        """Draw the color selection screen"""
+        # Draw title
+        title = self.large_font.render("Choose Your Color", True, COLOR_TEXT)
+        surface.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, 80))
+        
+        # Draw description
+        description = self.medium_font.render("Select the color you want to play as", True, COLOR_TEXT)
+        surface.blit(description, (WINDOW_WIDTH // 2 - description.get_width() // 2, 130))
+        
+        # Draw buttons
+        mouse_pos = pygame.mouse.get_pos()
+        self.white_button.update(mouse_pos)
+        self.white_button.draw(surface)
+        self.black_button.update(mouse_pos)
+        self.black_button.draw(surface)
+        self.random_button.update(mouse_pos)
+        self.random_button.draw(surface)
+        
+        # Draw piece icons next to buttons
+        # White pieces
+        white_king = self.piece_images.get('K', None)
+        if white_king:
+            scaled_white = pygame.transform.scale(white_king, (40, 40))
+            surface.blit(scaled_white, (self.white_button.rect.right + 20, self.white_button.rect.centery - 20))
+        
+        # Black pieces
+        black_king = self.piece_images.get('k', None)
+        if black_king:
+            scaled_black = pygame.transform.scale(black_king, (40, 40))
+            surface.blit(scaled_black, (self.black_button.rect.right + 20, self.black_button.rect.centery - 20))
+        
+        # Draw universal back button
+        self.universal_back_button.update(mouse_pos)
+        self.universal_back_button.draw(surface)
+    
+    def draw_hint_selection(self, surface: pygame.Surface) -> None:
+        """Draw the hint selection screen"""
+        # Draw title
+        title = self.large_font.render("Choose Hint Count", True, COLOR_TEXT)
+        surface.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, 80))
+        
+        # Draw description
+        description = self.medium_font.render("How many hints do you want?", True, COLOR_TEXT)
+        surface.blit(description, (WINDOW_WIDTH // 2 - description.get_width() // 2, 130))
+        
+        # Draw buttons
+        mouse_pos = pygame.mouse.get_pos()
+        self.no_hints_button.update(mouse_pos)
+        self.no_hints_button.draw(surface)
+        self.one_hint_button.update(mouse_pos)
+        self.one_hint_button.draw(surface)
+        self.two_hints_button.update(mouse_pos)
+        self.two_hints_button.draw(surface)
+        self.three_hints_button.update(mouse_pos)
+        self.three_hints_button.draw(surface)
+        
+        # Draw universal back button
+        self.universal_back_button.update(mouse_pos)
+        self.universal_back_button.draw(surface)
+    
+    def draw_checkmate_overlay(self, surface: pygame.Surface) -> None:
+        """Draw a CHECKMATE overlay on the game screen"""
+        # Create a semi-transparent overlay
+        overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 128))  # Semi-transparent black
+        surface.blit(overlay, (0, 0))
+        
+        # Space out the letters for more visual impact
+        spaced_text = "C  H E C K M A T E"
+        
+        # Draw CHECKMATE text with larger font for better visibility
+        bigger_font = pygame.font.SysFont("Arial", 60)  # Increased from 48
+        text = bigger_font.render(spaced_text, True, (255, 50, 50))
+        text_width = text.get_width()
+        text_x = WINDOW_WIDTH // 2 - text_width // 2
+        text_y = WINDOW_HEIGHT // 2 - 50
+        
+        # Add glow effect
+        for offset in range(3, 0, -1):
+            glow_text = bigger_font.render(spaced_text, True, (200, 50, 50, 128))
+            surface.blit(glow_text, (text_x - offset, text_y - offset))
+            surface.blit(glow_text, (text_x + offset, text_y - offset))
+            surface.blit(glow_text, (text_x - offset, text_y + offset))
+            surface.blit(glow_text, (text_x + offset, text_y + offset))
+        
+        # Draw main text
+        surface.blit(text, (text_x, text_y))
+
+    def draw_result_overlay(self, surface: pygame.Surface, is_winner: bool) -> None:
+        """Draw a WIN/LOSE overlay on the game screen"""
+        # Create a semi-transparent overlay
+        overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 160))  # Semi-transparent black
+        surface.blit(overlay, (0, 0))
+        
+        # Space out the letters for more visual impact
+        win_text = "Y O U   W I N !"
+        lose_text = "Y O U   L O S E !"
+        
+        # Draw result text based on outcome
+        text_content = win_text if is_winner else lose_text
+        text_color = (50, 255, 50) if is_winner else (255, 50, 50)  # Green for win, red for lose
+        
+        # Use larger font for better visibility
+        bigger_font = pygame.font.SysFont("Arial", 60)  # Increased from 48
+        text = bigger_font.render(text_content, True, text_color)
+        text_width = text.get_width()
+        text_x = WINDOW_WIDTH // 2 - text_width // 2
+        text_y = WINDOW_HEIGHT // 2 - 50
+        
+        # Add glow effect
+        glow_color = (50, 200, 50, 128) if is_winner else (200, 50, 50, 128)
+        for offset in range(3, 0, -1):
+            glow_text = bigger_font.render(text_content, True, glow_color)
+            surface.blit(glow_text, (text_x - offset, text_y - offset))
+            surface.blit(glow_text, (text_x + offset, text_y - offset))
+            surface.blit(glow_text, (text_x - offset, text_y + offset))
+            surface.blit(glow_text, (text_x + offset, text_y + offset))
+        
+        # Draw main text
+        surface.blit(text, (text_x, text_y))
+    
+    def set_board_orientation(self, player_color: chess.Color) -> None:
+        """
+        Set the board orientation based on player color
+        
+        Args:
+            player_color: chess.WHITE or chess.BLACK
+        """
+        # Flip the board when playing as black so player's pieces are at the bottom
+        self.board_flipped = (player_color == chess.BLACK)
+
+class VolumeSlider:
+    def __init__(self, x, y, width, height):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.knob_rect = pygame.Rect(x, y, 15, height + 10)
+        self.value = 0.7  # Default volume
+        self.dragging = False
+        self.update_knob_position()
+    
+    def update_knob_position(self):
+        # Position knob based on value
+        self.knob_rect.centerx = self.rect.left + int(self.value * self.rect.width)
+        self.knob_rect.centery = self.rect.centery
+    
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if self.knob_rect.collidepoint(event.pos):
+                self.dragging = True
+        elif event.type == pygame.MOUSEBUTTONUP:
+            self.dragging = False
+        elif event.type == pygame.MOUSEMOTION and self.dragging:
+            # Calculate new value based on mouse position
+            mouse_x = max(self.rect.left, min(event.pos[0], self.rect.right))
+            self.value = (mouse_x - self.rect.left) / self.rect.width
+            self.value = max(0.0, min(1.0, self.value))  # Clamp between 0 and 1
+            self.update_knob_position()
+    
+    def draw(self, surface):
+        # Draw slider track
+        pygame.draw.rect(surface, (80, 80, 80), self.rect)
+        pygame.draw.rect(surface, (120, 120, 120), self.rect, 1)
+        
+        # Draw filled portion
+        filled_rect = pygame.Rect(self.rect.left, self.rect.top, 
+                                int(self.rect.width * self.value), self.rect.height)
+        pygame.draw.rect(surface, (60, 120, 180), filled_rect)
+        
+        # Draw knob
+        pygame.draw.rect(surface, (200, 200, 200), self.knob_rect)
+        pygame.draw.rect(surface, (100, 100, 100), self.knob_rect, 1)
