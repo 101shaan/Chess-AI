@@ -527,12 +527,16 @@ class ChessUI:
             # Get screen coordinates for this square
             x, y = self.square_to_coords(square)
             
-            # Create a transparent highlight surface
-            highlight = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
-            highlight.fill(COLOR_MOVE_INDICATOR)
+            # Calculate the center of the square
+            center_x = x + SQUARE_SIZE // 2
+            center_y = y + SQUARE_SIZE // 2
             
-            # Draw highlight
-            surface.blit(highlight, (x, y))
+            # Draw a circle in the center of the square
+            circle_radius = SQUARE_SIZE // 4
+            pygame.draw.circle(surface, COLOR_MOVE_INDICATOR, (center_x, center_y), circle_radius)
+            
+            # Draw a border around the circle for better visibility
+            pygame.draw.circle(surface, (50, 50, 0), (center_x, center_y), circle_radius, 2)
     
     def draw_highlights(self, surface: pygame.Surface, 
                         selected_square: Optional[chess.Square], 
@@ -542,8 +546,8 @@ class ChessUI:
         if selected_square is not None:
             pos = self.square_to_coords(selected_square)
             selected_rect = pygame.Rect(
-                pos[0] - SQUARE_SIZE // 2,
-                pos[1] - SQUARE_SIZE // 2,
+                pos[0],
+                pos[1],
                 SQUARE_SIZE, SQUARE_SIZE
             )
             
@@ -554,15 +558,17 @@ class ChessUI:
         # Highlight legal move targets
         for square in highlighted_squares:
             pos = self.square_to_coords(square)
-            target_rect = pygame.Rect(
-                pos[0] - SQUARE_SIZE // 2,
-                pos[1] - SQUARE_SIZE // 2,
-                SQUARE_SIZE, SQUARE_SIZE
-            )
             
-            # Draw a smaller circle in the center of the square
-            circle_pos = pos
-            pygame.draw.circle(surface, COLOR_MOVE_INDICATOR[:3], circle_pos, SQUARE_SIZE // 4)
+            # Calculate center of square
+            center_x = pos[0] + SQUARE_SIZE // 2
+            center_y = pos[1] + SQUARE_SIZE // 2
+            
+            # Draw a circle in the center of the square
+            circle_radius = SQUARE_SIZE // 4
+            pygame.draw.circle(surface, COLOR_MOVE_INDICATOR, (center_x, center_y), circle_radius)
+            
+            # Draw a border around the circle for better visibility
+            pygame.draw.circle(surface, (50, 50, 0), (center_x, center_y), circle_radius, 2)
     
     def animate_move(self, move: chess.Move, board: chess.Board) -> None:
         """Start a new piece animation for a move"""
