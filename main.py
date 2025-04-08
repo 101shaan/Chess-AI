@@ -20,11 +20,13 @@ from engine.engine_manager import ChessEngine
 from modules.board import GameBoard
 from modules.ui import ChessUI, SQUARE_SIZE, BOARD_SIZE, BOARD_OFFSET_X, BOARD_OFFSET_Y, WINDOW_WIDTH, WINDOW_HEIGHT, COLOR_BACKGROUND, COLOR_TEXT
 from modules.audio import AudioManager
+from modules.settings import SettingsManager, THEMES
 
 # Game mode constants
 GAME_MODE_MENU = 0
 GAME_MODE_PLAY = 1
 GAME_MODE_RESULT = 2
+GAME_MODE_SETTINGS = 3
 
 class ChessGame:
     def __init__(self) -> None:
@@ -37,10 +39,16 @@ class ChessGame:
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         self.clock = pygame.time.Clock()
         
+        # Initialize settings manager
+        self.settings = SettingsManager()
+        
         # Initialize game components
         self.board = GameBoard()
         self.ui = ChessUI()
         self.audio = AudioManager()
+        
+        # Apply current settings
+        self.apply_settings()
         
         # Game state variables
         self.game_mode = GAME_MODE_MENU
@@ -65,6 +73,9 @@ class ChessGame:
                 )
         except Exception as e:
             self.show_error_and_exit(str(e))
+        
+        # Start background music
+        self.start_background_music()
         
         # Game result
         self.game_result: Optional[str] = None
@@ -112,6 +123,8 @@ class ChessGame:
                     # Return to menu or quit game
                     if self.game_mode == GAME_MODE_PLAY:
                         self.game_mode = GAME_MODE_MENU
+                    elif self.game_mode == GAME_MODE_SETTINGS:
+                        self.game_mode = GAME_MODE_MENU
                     elif self.game_mode == GAME_MODE_MENU:
                         self.quit()
                         
@@ -120,59 +133,98 @@ class ChessGame:
                     self.new_game()
     
     def handle_mouse_click(self, pos: Tuple[int, int]) -> None:
-        """Handle mouse click event"""
-        # In menu mode, check for button clicks
+        """
+        Handle mouse click event
+        
+        Args:
+            pos: (x, y) position of the click
+        """
+        # Menu screen click handling
         if self.game_mode == GAME_MODE_MENU:
             if self.ui.new_game_button.is_clicked(pos):
                 self.new_game()
-                self.audio.play('game_start')
+            elif self.ui.settings_button.is_clicked(pos):
+                self.game_mode = GAME_MODE_SETTINGS
             elif self.ui.quit_button.is_clicked(pos):
                 self.quit()
-            # Handle difficulty adjustment buttons if implemented
-            elif hasattr(self.ui, 'difficulty_up_button') and self.ui.difficulty_up_button.is_clicked(pos):
-                self.ai_skill_level = min(MAX_SKILL_LEVEL, self.ai_skill_level + 1)
+            elif self.ui.difficulty_up_button.is_clicked(pos):
+                # Increase difficulty (max 20)
+                self.ai_skill_level = min(20, self.ai_skill_level + 1)
                 self.ai_rating = self.calculate_ai_rating(self.ai_skill_level)
-                # Update engine skill level if engine exists
-                if self.engine:
-                    self.engine.set_difficulty(self.ai_skill_level)
-                # Update UI to display new difficulty level
-                self.ui.difficulty_up_button.update_text(str(self.ai_skill_level))
-                self.ui.difficulty_down_button.update_text(str(self.ai_skill_level))
-                # Play sound
-                self.audio.play('move')
-            elif hasattr(self.ui, 'difficulty_down_button') and self.ui.difficulty_down_button.is_clicked(pos):
-                self.ai_skill_level = max(MIN_SKILL_LEVEL, self.ai_skill_level - 1)
+            elif self.ui.difficulty_down_button.is_clicked(pos):
+                # Decrease difficulty (min 0)
+                self.ai_skill_level = max(0, self.ai_skill_level - 1)
                 self.ai_rating = self.calculate_ai_rating(self.ai_skill_level)
-                # Update engine skill level if engine exists
-                if self.engine:
-                    self.engine.set_difficulty(self.ai_skill_level)
-                # Update UI to display new difficulty level
-                self.ui.difficulty_up_button.update_text(str(self.ai_skill_level))
-                self.ui.difficulty_down_button.update_text(str(self.ai_skill_level))
-                # Play sound
-                self.audio.play('move')
-            return
-            
-        # In game over mode, check for menu button
-        if self.game_mode == GAME_MODE_RESULT:
-            if hasattr(self.ui, 'menu_button') and self.ui.menu_button.is_clicked(pos):
+    
+        # Settings screen click handling
+        elif self.game_mode == GAME_MODE_SETTINGS:
+            # Theme buttons
+            for theme_name, button in self.ui.theme_buttons.items():
+                if button.is_clicked(pos):
+                    self.settings.set_theme(theme_name)
+                    self.apply_settings()
+        
+            # Music toggle button
+            if self.ui.music_toggle_button.is_clicked(pos):
+                current_state = self.settings.is_music_enabled()
+                self.settings.set_music_enabled(not current_state)
+                
+                if self.settings.is_music_enabled():
+                    self.start_background_music()
+                else:
+                    self.audio.stop_music()
+        
+            # Back button
+            if self.ui.back_button.is_clicked(pos):
                 self.game_mode = GAME_MODE_MENU
-            return
-            
-        # In play mode, handle board interaction
-        if self.game_mode == GAME_MODE_PLAY:
-            # Skip if not human's turn or move is in progress
-            if not self.human_turn or self.move_in_progress or self.ai_thinking:
+    
+        # Game result screen click handling
+        elif self.game_mode == GAME_MODE_RESULT:
+            if self.ui.menu_button.is_clicked(pos):
+                self.game_mode = GAME_MODE_MENU
+    
+        # Game screen click handling
+        elif self.game_mode == GAME_MODE_PLAY:
+            # Check for in-game settings button
+            if self.ui.in_game_settings_button.is_clicked(pos):
+                self.game_mode = GAME_MODE_SETTINGS
                 return
             
-            # Convert mouse position to chess square
+            # Check if position is on the board
             square = self.ui.pos_to_square(pos)
+            if square is not None:
+                self.handle_board_click(square)
+    
+    def apply_settings(self) -> None:
+        """Apply current settings to the game"""
+        theme = self.settings.get_theme()
+        theme_colors = self.settings.get_theme_colors()
+        
+        # Update global color constants with theme colors
+        global COLOR_WHITE, COLOR_BLACK, COLOR_BACKGROUND, COLOR_TEXT
+        global COLOR_BUTTON, COLOR_BUTTON_HOVER, COLOR_HIGHLIGHT, COLOR_MOVE_INDICATOR
+        
+        COLOR_WHITE = theme_colors["light_square"]
+        COLOR_BLACK = theme_colors["dark_square"]
+        COLOR_BACKGROUND = theme_colors["background"]
+        COLOR_TEXT = theme_colors["text"]
+        COLOR_HIGHLIGHT = theme_colors["highlight"]
+        COLOR_MOVE_INDICATOR = theme_colors["move_indicator"]
+        COLOR_BUTTON = theme_colors["button"]
+        COLOR_BUTTON_HOVER = theme_colors["button_hover"]
+        
+        # Set audio volume
+        self.audio.set_volume(self.settings.get_volume())
+    
+    def start_background_music(self) -> None:
+        """Start playing background music based on settings"""
+        if self.settings.is_music_enabled():
+            music_dir = "assets/sounds/background_music"
+            music_file = self.settings.get_current_music()
+            full_path = os.path.join(music_dir, music_file)
             
-            # Skip if click is outside the board
-            if square is None:
-                return
-            
-            self.handle_board_click(square)
+            if os.path.exists(full_path):
+                self.audio.play_music(full_path)
     
     def handle_board_click(self, square: chess.Square) -> None:
         """Handle clicks on the chess board during gameplay"""
@@ -311,6 +363,8 @@ class ChessGame:
             self.render_game()
         elif self.game_mode == GAME_MODE_RESULT:
             self.render_result()
+        elif self.game_mode == GAME_MODE_SETTINGS:
+            self.render_settings()
         
         # Update display
         pygame.display.flip()
@@ -353,7 +407,12 @@ class ChessGame:
         if self.ai_thinking:
             thinking_time = time.time() - self.last_ai_move_time
             self.ui.draw_thinking_indicator(self.screen, thinking_time)
-
+        
+        # Draw settings button in-game
+        mouse_pos = pygame.mouse.get_pos()
+        self.ui.in_game_settings_button.update(mouse_pos)
+        self.ui.in_game_settings_button.draw(self.screen)
+    
     def render_result(self) -> None:
         """Render the game result screen"""
         # Clear screen
@@ -361,6 +420,17 @@ class ChessGame:
         
         # Draw the result UI
         self.ui.draw_game_result(self.screen, self.game_result_message, self.ai_rating)
+        
+        # Flip display
+        pygame.display.flip()
+    
+    def render_settings(self) -> None:
+        """Render the settings screen"""
+        # Clear screen
+        self.screen.fill(COLOR_BACKGROUND)
+        
+        # Draw the settings UI
+        self.ui.draw_settings(self.screen, self.settings)
         
         # Flip display
         pygame.display.flip()

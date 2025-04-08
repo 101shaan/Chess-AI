@@ -19,7 +19,7 @@ from config import *
 SQUARE_SIZE = 65
 BOARD_SIZE = SQUARE_SIZE * 8
 BOARD_OFFSET_X = 50
-BOARD_OFFSET_Y = 80
+BOARD_OFFSET_Y = 50  # Reduced from 80 to move the board upward
 
 # Window constants
 WINDOW_WIDTH = 800
@@ -40,6 +40,11 @@ COLOR_TEXT = (220, 220, 220)  # Light text
 COLOR_BUTTON = (60, 66, 80)  # Button color
 COLOR_BUTTON_HOVER = (80, 86, 100)  # Button hover color
 COLOR_LIGHT_GRAY = (100, 100, 100)
+
+# Background images
+BACKGROUND_IMAGES = {
+    "wooden": "assets/background_images/wooden.jpg"
+}
 
 # Animation constants
 ANIMATION_DURATION = 0.3  # seconds
@@ -170,6 +175,9 @@ class ChessUI:
         # Load piece images
         self.piece_images = self.load_pieces()
         
+        # Load background images
+        self.background_images = self.load_backgrounds()
+        
         # Text rendering
         pygame.font.init()
         
@@ -196,9 +204,17 @@ class ChessUI:
             "New Game"
         )
         
-        self.quit_button = Button(
+        self.settings_button = Button(
             center_x - button_width // 2,
             200 + button_height + button_spacing,
+            button_width,
+            button_height,
+            "Settings"
+        )
+        
+        self.quit_button = Button(
+            center_x - button_width // 2,
+            200 + (button_height + button_spacing) * 2,
             button_width,
             button_height,
             "Quit"
@@ -222,6 +238,35 @@ class ChessUI:
             "-"
         )
         
+        # Settings screen buttons
+        self.theme_buttons = {}
+        theme_names = ["default", "wooden", "dark", "royal", "moonlight"]
+        
+        for i, theme in enumerate(theme_names):
+            self.theme_buttons[theme] = Button(
+                center_x - button_width // 2,
+                150 + (button_height + 10) * i,
+                button_width,
+                button_height,
+                theme.capitalize()
+            )
+        
+        self.music_toggle_button = Button(
+            center_x - button_width // 2,
+            150 + (button_height + 10) * len(theme_names),
+            button_width,
+            button_height,
+            "Music: On"
+        )
+        
+        self.back_button = Button(
+            center_x - button_width // 2,
+            150 + (button_height + 10) * (len(theme_names) + 2),
+            button_width,
+            button_height,
+            "Back"
+        )
+        
         # Game over screen buttons
         self.menu_button = Button(
             center_x - button_width // 2,
@@ -231,9 +276,19 @@ class ChessUI:
             "Back to Menu"
         )
         
+        # Settings button for in-game access
+        self.in_game_settings_button = Button(
+            WINDOW_WIDTH - 120,
+            10,
+            100,
+            30,
+            "Settings",
+            font_size=16
+        )
+        
         # Last square clicked
         self.last_click = None
-        
+    
     def load_pieces(self) -> Dict[str, pygame.Surface]:
         """Load chess piece images from assets folder"""
         pieces = {}
@@ -276,6 +331,23 @@ class ChessUI:
             print(f"Error loading piece images: {e}")
             
         return pieces
+    
+    def load_backgrounds(self) -> Dict[str, Optional[pygame.Surface]]:
+        """Load background images"""
+        backgrounds = {}
+        
+        for theme, path in BACKGROUND_IMAGES.items():
+            try:
+                # Load and scale the background to fit the window
+                background = pygame.image.load(path)
+                background = pygame.transform.scale(background, (WINDOW_WIDTH, WINDOW_HEIGHT))
+                backgrounds[theme] = background
+                print(f"Loaded background for theme: {theme}")
+            except Exception as e:
+                print(f"Error loading background image for {theme}: {e}")
+                backgrounds[theme] = None
+        
+        return backgrounds
     
     def square_coords_to_pos(self, coords: Tuple[int, int]) -> Tuple[int, int]:
         """
@@ -406,7 +478,7 @@ class ChessUI:
             
             # Position below the board squares
             x = BOARD_OFFSET_X + file * SQUARE_SIZE + SQUARE_SIZE // 2 - text.get_width() // 2
-            y_below = BOARD_OFFSET_Y + BOARD_SIZE + 5
+            y_below = BOARD_OFFSET_Y + BOARD_SIZE + 10
             
             # Draw with better contrast background
             pygame.draw.rect(surface, COLOR_BACKGROUND, 
@@ -591,8 +663,11 @@ class ChessUI:
         # Return whether there are still animations in progress
         return len(self.animations) > 0
     
-    def draw_menu(self, surface: pygame.Surface, difficulty: int, ai_rating: int) -> None:
+    def draw_menu(self, surface: pygame.Surface, difficulty: int, ai_rating: int, current_theme: str = "default") -> None:
         """Draw the main menu interface"""
+        # Draw background based on current theme
+        self.draw_theme_background(surface, current_theme)
+        
         # Draw title
         title = self.large_font.render("Chess AI", True, COLOR_TEXT)
         surface.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, 100))
@@ -601,6 +676,8 @@ class ChessUI:
         mouse_pos = pygame.mouse.get_pos()
         self.new_game_button.update(mouse_pos)
         self.new_game_button.draw(surface)
+        self.settings_button.update(mouse_pos)
+        self.settings_button.draw(surface)
         self.quit_button.update(mouse_pos)
         self.quit_button.draw(surface)
         
@@ -620,51 +697,138 @@ class ChessUI:
         # Draw difficulty help text
         help_text = self.small_font.render("Use +/- buttons to adjust AI strength", True, COLOR_TEXT)
         surface.blit(help_text, (WINDOW_WIDTH // 2 - help_text.get_width() // 2, WINDOW_HEIGHT // 2 + 80))
-        
-        # Draw instructions
-        instructions = [
-            "Click a piece to select it",
-            "Click a highlighted square to move",
-            "Press ESC to return to menu",
-            "Press N for a new game"
-        ]
-        
-        y_offset = WINDOW_HEIGHT // 2 + 150
-        for instruction in instructions:
-            text = self.small_font.render(instruction, True, COLOR_TEXT)
-            surface.blit(text, (WINDOW_WIDTH // 2 - text.get_width() // 2, y_offset))
-            y_offset += 30
     
-    def draw_game_info(self, surface: pygame.Surface, board_state: Any, 
-                       human_turn: bool, ai_level: int, 
-                       selected_square: Optional[chess.Square], 
-                       highlighted_squares: List[chess.Square]) -> None:
-        """Draw game status and highlighted squares"""
-        # Draw move highlights
-        self.draw_highlights(surface, selected_square, highlighted_squares)
+    def draw_game(self, surface: pygame.Surface, board_state: Any, 
+                  selected_square: Optional[chess.Square], 
+                  highlighted_squares: List[chess.Square],
+                  human_turn: bool, ai_thinking: bool, thinking_time: float,
+                  current_theme: str = "default") -> None:
+        """
+        Draw the complete game interface
         
-        # Draw turn indicator
+        Args:
+            surface: Pygame surface to draw on
+            board_state: GameBoard object containing the chess state
+            selected_square: Currently selected square
+            highlighted_squares: Legal move squares to highlight
+            human_turn: True if it's the human player's turn
+            ai_thinking: True if AI is calculating
+            thinking_time: Time AI has been thinking
+            current_theme: Current theme name
+        """
+        # Draw theme background
+        self.draw_theme_background(surface, current_theme)
+        
+        # Draw the chess board and pieces
+        self.draw_board(surface, board_state)
+        
+        # Draw highlighted squares for selection
+        self.draw_highlights(
+            surface, 
+            selected_square, 
+            highlighted_squares
+        )
+        
+        # Draw animated pieces on top
+        self.draw_animated_pieces(surface, board_state)
+        
+        # Draw game info
         turn_text = "Your Turn" if human_turn else "AI Thinking..."
         turn_surface = self.medium_font.render(turn_text, True, COLOR_TEXT)
-        surface.blit(turn_surface, (WINDOW_WIDTH - 150, 20))
         
-        # Draw game state
-        state = board_state.get_game_state()
-        if state != "playing":
-            state_color = (255, 0, 0) if state == "check" else COLOR_TEXT
-            state_surface = self.medium_font.render(state.capitalize(), True, state_color)
-            surface.blit(state_surface, (WINDOW_WIDTH - 150, 50))
+        # Add a background behind the text for better visibility
+        text_bg = pygame.Rect(
+            BOARD_OFFSET_X + BOARD_SIZE + 20, 
+            BOARD_OFFSET_Y,
+            turn_surface.get_width() + 10,
+            turn_surface.get_height() + 5
+        )
+        pygame.draw.rect(surface, COLOR_BACKGROUND, text_bg)
+        surface.blit(turn_surface, (BOARD_OFFSET_X + BOARD_SIZE + 25, BOARD_OFFSET_Y + 2))
         
         # Draw captured pieces
         self.draw_captured_pieces(surface, board_state)
         
-        # Draw move history
-        self.draw_move_history(surface, board_state)
+        # Draw AI info if AI is thinking
+        if ai_thinking:
+            thinking_time = thinking_time
+            self.draw_thinking_indicator(surface, thinking_time)
         
-        # Draw AI level
-        ai_text = f"AI Level: {ai_level}"
-        ai_surface = self.small_font.render(ai_text, True, COLOR_TEXT)
-        surface.blit(ai_surface, (20, 20))
+        # Draw settings button in-game
+        mouse_pos = pygame.mouse.get_pos()
+        self.in_game_settings_button.update(mouse_pos)
+        self.in_game_settings_button.draw(surface)
+    
+    def draw_settings(self, surface: pygame.Surface, settings_manager, return_to_game: bool = False) -> None:
+        """
+        Draw the settings interface
+        
+        Args:
+            surface: Pygame surface to draw on
+            settings_manager: Settings manager instance
+            return_to_game: Whether to return to game when back is clicked
+        """
+        # Draw background based on current theme
+        current_theme = settings_manager.get_theme()
+        self.draw_theme_background(surface, current_theme)
+        
+        # Draw title
+        title = self.large_font.render("Settings", True, COLOR_TEXT)
+        surface.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, 80))
+        
+        # Get mouse position for button updates
+        mouse_pos = pygame.mouse.get_pos()
+        
+        # Draw theme buttons
+        theme_title = self.medium_font.render("Board Themes:", True, COLOR_TEXT)
+        surface.blit(theme_title, (WINDOW_WIDTH // 2 - theme_title.get_width() // 2, 130))
+        
+        # Import THEMES here to avoid circular imports
+        from modules.settings import THEMES
+        
+        current_theme = settings_manager.get_theme()
+        for theme_name, button in self.theme_buttons.items():
+            # Highlight the current theme
+            if theme_name == current_theme:
+                button.color = (100, 120, 160)
+            else:
+                button.color = COLOR_BUTTON
+                
+            button.update(mouse_pos)
+            button.draw(surface)
+            
+            # Add a small preview of the theme next to the button
+            theme_colors = THEMES[theme_name]
+            preview_size = 20
+            preview_x = button.rect.right + 20
+            preview_y = button.rect.centery - preview_size
+            
+            # Draw mini-board preview (2x2 squares)
+            for i in range(2):
+                for j in range(2):
+                    is_light = (i + j) % 2 != 0
+                    color = theme_colors["light_square"] if is_light else theme_colors["dark_square"]
+                    pygame.draw.rect(surface, color, 
+                                    (preview_x + i * preview_size, 
+                                     preview_y + j * preview_size, 
+                                     preview_size, preview_size))
+        
+        # Draw music toggle button
+        music_state = "On" if settings_manager.is_music_enabled() else "Off"
+        self.music_toggle_button.update_text(f"Music: {music_state}")
+        self.music_toggle_button.update(mouse_pos)
+        self.music_toggle_button.draw(surface)
+        
+        # Update back button text based on where we should return to
+        back_text = "Back to Game" if return_to_game else "Back to Menu"
+        self.back_button.update_text(back_text)
+        self.back_button.update(mouse_pos)
+        self.back_button.draw(surface)
+        
+        # Draw help text
+        help_text = self.small_font.render("Choose a theme and toggle music", True, COLOR_TEXT)
+        surface.blit(help_text, (WINDOW_WIDTH // 2 - help_text.get_width() // 2, 
+                                self.music_toggle_button.rect.bottom + 20))
     
     def draw_captured_pieces(self, surface: pygame.Surface, board_state: Any) -> None:
         """Draw captured pieces on the side of the board"""
@@ -769,6 +933,37 @@ class ChessUI:
             if text_y < history_y + history_rect.height - 20:
                 surface.blit(text, (history_x + 10, text_y))
     
+    def draw_game_info(self, surface: pygame.Surface, board_state: Any, 
+                       human_turn: bool, ai_level: int, 
+                       selected_square: Optional[chess.Square], 
+                       highlighted_squares: List[chess.Square]) -> None:
+        """Draw game status and highlighted squares"""
+        # Draw move highlights
+        self.draw_highlights(surface, selected_square, highlighted_squares)
+        
+        # Draw turn indicator
+        turn_text = "Your Turn" if human_turn else "AI Thinking..."
+        turn_surface = self.medium_font.render(turn_text, True, COLOR_TEXT)
+        surface.blit(turn_surface, (WINDOW_WIDTH - 150, 20))
+        
+        # Draw game state
+        state = board_state.get_game_state()
+        if state != "playing":
+            state_color = (255, 0, 0) if state == "check" else COLOR_TEXT
+            state_surface = self.medium_font.render(state.capitalize(), True, state_color)
+            surface.blit(state_surface, (WINDOW_WIDTH - 150, 50))
+        
+        # Draw captured pieces
+        self.draw_captured_pieces(surface, board_state)
+        
+        # Draw move history
+        self.draw_move_history(surface, board_state)
+        
+        # Draw AI level
+        ai_text = f"AI Level: {ai_level}"
+        ai_surface = self.small_font.render(ai_text, True, COLOR_TEXT)
+        surface.blit(ai_surface, (20, 20))
+    
     def draw_game_result(self, surface: pygame.Surface, result_message: str, ai_rating: int) -> None:
         """Draw the game result screen"""
         # Draw semi-transparent overlay
@@ -809,3 +1004,18 @@ class ChessUI:
         time_text = f"Time: {thinking_time:.1f}s"
         time_surface = self.small_font.render(time_text, True, COLOR_TEXT)
         surface.blit(time_surface, (WINDOW_WIDTH - 180, WINDOW_HEIGHT - 25))
+    
+    def draw_theme_background(self, surface: pygame.Surface, theme: str) -> None:
+        """
+        Draw the appropriate background for the current theme
+        
+        Args:
+            surface: Pygame surface to draw on
+            theme: Current theme name
+        """
+        # Fill with default background color first
+        surface.fill(COLOR_BACKGROUND)
+        
+        # If the theme has a background image, draw it
+        if theme in self.background_images and self.background_images[theme] is not None:
+            surface.blit(self.background_images[theme], (0, 0))
