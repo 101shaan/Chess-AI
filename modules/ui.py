@@ -224,8 +224,8 @@ class ChessUI:
         # Move history navigation buttons
         nav_button_size = 40
         self.move_back_button = Button(
-            BOARD_OFFSET_X,
-            BOARD_OFFSET_Y + BOARD_SIZE + 10,
+            WINDOW_WIDTH // 2 - nav_button_size - 10,  # Centered at the top
+            10,  # Top of the screen
             nav_button_size,
             nav_button_size,
             "←",
@@ -233,8 +233,8 @@ class ChessUI:
         )
         
         self.move_forward_button = Button(
-            BOARD_OFFSET_X + nav_button_size + 10,
-            BOARD_OFFSET_Y + BOARD_SIZE + 10,
+            WINDOW_WIDTH // 2 + 10,  # Centered at the top
+            10,  # Top of the screen
             nav_button_size,
             nav_button_size,
             "→",
@@ -976,10 +976,10 @@ class ChessUI:
         # Draw viewing history message if in history mode
         if viewing_history:
             history_msg = self.medium_font.render("Viewing History", True, (220, 150, 50))
-            msg_rect = history_msg.get_rect(center=(WINDOW_WIDTH // 2, 30))
+            msg_rect = history_msg.get_rect(center=(self.move_back_button.rect.left - 95, self.move_back_button.rect.centery))
             pygame.draw.rect(surface, (40, 40, 40), 
-                            (msg_rect.left - 10, msg_rect.top - 5, 
-                            msg_rect.width + 20, msg_rect.height + 10))
+                             (msg_rect.left - 10, msg_rect.top - 5, 
+                              msg_rect.width + 20, msg_rect.height + 10))
             surface.blit(history_msg, msg_rect)
     
     def draw_settings(self, surface: pygame.Surface, settings_manager, return_to_game: bool = False) -> None:
