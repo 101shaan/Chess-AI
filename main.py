@@ -52,6 +52,7 @@ class ChessGame:
         
         # Game state variables
         self.game_mode = GAME_MODE_MENU
+        self.previous_mode = GAME_MODE_MENU  # Used to track where to return from settings
         self.selected_square: Optional[chess.Square] = None
         self.highlighted_squares: List[chess.Square] = []
         self.human_turn = True  # True for white, False for black
@@ -124,7 +125,8 @@ class ChessGame:
                     if self.game_mode == GAME_MODE_PLAY:
                         self.game_mode = GAME_MODE_MENU
                     elif self.game_mode == GAME_MODE_SETTINGS:
-                        self.game_mode = GAME_MODE_MENU
+                        # Return to previous mode (menu or game)
+                        self.game_mode = self.previous_mode
                     elif self.game_mode == GAME_MODE_MENU:
                         self.quit()
                         
@@ -144,6 +146,7 @@ class ChessGame:
             if self.ui.new_game_button.is_clicked(pos):
                 self.new_game()
             elif self.ui.settings_button.is_clicked(pos):
+                self.previous_mode = GAME_MODE_MENU
                 self.game_mode = GAME_MODE_SETTINGS
             elif self.ui.quit_button.is_clicked(pos):
                 self.quit()
@@ -176,7 +179,8 @@ class ChessGame:
         
             # Back button
             if self.ui.back_button.is_clicked(pos):
-                self.game_mode = GAME_MODE_MENU
+                # Return to previous mode (menu or game)
+                self.game_mode = self.previous_mode
     
         # Game result screen click handling
         elif self.game_mode == GAME_MODE_RESULT:
@@ -187,6 +191,7 @@ class ChessGame:
         elif self.game_mode == GAME_MODE_PLAY:
             # Check for in-game settings button
             if self.ui.in_game_settings_button.is_clicked(pos):
+                self.previous_mode = GAME_MODE_PLAY
                 self.game_mode = GAME_MODE_SETTINGS
                 return
             
@@ -371,48 +376,23 @@ class ChessGame:
 
     def render_menu(self) -> None:
         """Render the main menu"""
-        # Clear screen
-        self.screen.fill(COLOR_BACKGROUND)
-        
-        # Draw the menu UI
-        self.ui.draw_menu(self.screen, self.ai_skill_level, self.ai_rating)
-        
-        # Flip display
-        pygame.display.flip()
-    
+        # Draw the menu UI with current theme
+        self.ui.draw_menu(self.screen, self.ai_skill_level, self.ai_rating, self.settings.get_theme())
+
     def render_game(self) -> None:
         """Render the game board and UI"""
-        # Draw the chess board and pieces
-        self.ui.draw_board(self.screen, self.board)
-        
-        # Draw highlighted squares for selection
-        self.ui.draw_highlights(
-            self.screen, 
-            self.selected_square, 
-            self.highlighted_squares
+        # Use the updated draw_game method with theme support
+        self.ui.draw_game(
+            self.screen,
+            self.board,
+            self.selected_square,
+            self.highlighted_squares,
+            self.human_turn,
+            self.ai_thinking,
+            time.time() - self.last_ai_move_time if self.ai_thinking else 0,
+            self.settings.get_theme()
         )
-        
-        # Draw animated pieces on top
-        self.ui.draw_animated_pieces(self.screen, self.board)
-        
-        # Draw game info
-        turn_text = "Your Turn" if self.human_turn else "AI Thinking..."
-        turn_surface = self.ui.medium_font.render(turn_text, True, COLOR_TEXT)
-        self.screen.blit(turn_surface, (BOARD_OFFSET_X + BOARD_SIZE + 20, BOARD_OFFSET_Y))
-        
-        # Draw captured pieces
-        self.ui.draw_captured_pieces(self.screen, self.board)
-        
-        # Draw AI info if AI is thinking
-        if self.ai_thinking:
-            thinking_time = time.time() - self.last_ai_move_time
-            self.ui.draw_thinking_indicator(self.screen, thinking_time)
-        
-        # Draw settings button in-game
-        mouse_pos = pygame.mouse.get_pos()
-        self.ui.in_game_settings_button.update(mouse_pos)
-        self.ui.in_game_settings_button.draw(self.screen)
-    
+
     def render_result(self) -> None:
         """Render the game result screen"""
         # Clear screen
@@ -420,20 +400,14 @@ class ChessGame:
         
         # Draw the result UI
         self.ui.draw_game_result(self.screen, self.game_result_message, self.ai_rating)
-        
-        # Flip display
-        pygame.display.flip()
-    
+
     def render_settings(self) -> None:
         """Render the settings screen"""
-        # Clear screen
-        self.screen.fill(COLOR_BACKGROUND)
+        # Determine if we should return to game when back is clicked
+        return_to_game = (self.previous_mode == GAME_MODE_PLAY)
         
         # Draw the settings UI
-        self.ui.draw_settings(self.screen, self.settings)
-        
-        # Flip display
-        pygame.display.flip()
+        self.ui.draw_settings(self.screen, self.settings, return_to_game)
     
     def new_game(self) -> None:
         """Start a new chess game"""
