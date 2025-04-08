@@ -42,6 +42,9 @@ class ChessGame:
         # Initialize settings manager
         self.settings = SettingsManager()
         
+        # Always start with default theme
+        self.settings.set_theme("default")
+        
         # Initialize game components
         self.board = GameBoard()
         self.ui = ChessUI()

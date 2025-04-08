@@ -43,7 +43,11 @@ COLOR_LIGHT_GRAY = (100, 100, 100)
 
 # Background images
 BACKGROUND_IMAGES = {
-    "wooden": "assets/background_images/wooden.jpg"
+    "default": None,  # Use solid background
+    "wooden": "assets/background_images/wooden.jpg",
+    "dark": "assets/background_images/dark.png",
+    "royal": "assets/background_images/royal.jpg",
+    "moonlight": "assets/background_images/moonlight.jpg"
 }
 
 # Animation constants
@@ -417,6 +421,26 @@ class ChessUI:
             surface: Pygame surface to draw on
             board_state: GameBoard object containing the chess state
         """
+        # Import THEMES and current theme for proper square coloring
+        from modules.settings import THEMES
+        import os
+        
+        # Get current theme settings from a settings.json file if it exists
+        current_theme = "default"
+        if os.path.exists("settings.json"):
+            try:
+                import json
+                with open("settings.json", "r") as f:
+                    settings = json.load(f)
+                    current_theme = settings.get("theme", "default")
+            except:
+                pass
+        
+        # Get theme colors
+        theme_colors = THEMES.get(current_theme, THEMES["default"])
+        light_square_color = theme_colors["light_square"]
+        dark_square_color = theme_colors["dark_square"]
+        
         # Draw board background
         board_rect = pygame.Rect(
             BOARD_OFFSET_X, BOARD_OFFSET_Y, 
@@ -440,7 +464,7 @@ class ChessUI:
                 
                 # Alternate square colors
                 is_light = (file + rank) % 2 != 0
-                color = COLOR_WHITE if is_light else COLOR_BLACK
+                color = light_square_color if is_light else dark_square_color
                 
                 # Draw square
                 pygame.draw.rect(surface, color, square_rect)
@@ -454,7 +478,7 @@ class ChessUI:
                     highlight = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
                     highlight.fill(COLOR_HIGHLIGHT)
                     surface.blit(highlight, square_rect)
-                
+        
         # Draw non-animated pieces
         self.draw_pieces(surface, board_state)
         
@@ -684,9 +708,22 @@ class ChessUI:
         # Calculate AI ELO based on difficulty level
         ai_elo = 800 + (difficulty * 75)  # Approximate ELO based on skill level
         
-        # Draw AI rating selection
+        # Draw AI rating with background for better visibility
         ai_label = self.medium_font.render(f"AI Rating: {ai_rating}", True, COLOR_TEXT)
-        surface.blit(ai_label, (WINDOW_WIDTH // 2 - ai_label.get_width() // 2, WINDOW_HEIGHT // 2 + 40))
+        rating_width = ai_label.get_width() + 20
+        rating_height = ai_label.get_height() + 10
+        rating_x = WINDOW_WIDTH // 2 - rating_width // 2
+        rating_y = WINDOW_HEIGHT // 2 + 40
+        
+        # Draw background box
+        pygame.draw.rect(surface, COLOR_BUTTON, 
+                        (rating_x, rating_y, rating_width, rating_height))
+        pygame.draw.rect(surface, (50, 50, 50), 
+                        (rating_x, rating_y, rating_width, rating_height), 1)
+        
+        # Draw text centered in the box
+        surface.blit(ai_label, (WINDOW_WIDTH // 2 - ai_label.get_width() // 2, 
+                              rating_y + 5))
         
         # Update difficulty buttons
         self.difficulty_up_button.update(mouse_pos)
@@ -694,9 +731,22 @@ class ChessUI:
         self.difficulty_up_button.draw(surface)
         self.difficulty_down_button.draw(surface)
         
-        # Draw difficulty help text
+        # Draw difficulty help text with background
         help_text = self.small_font.render("Use +/- buttons to adjust AI strength", True, COLOR_TEXT)
-        surface.blit(help_text, (WINDOW_WIDTH // 2 - help_text.get_width() // 2, WINDOW_HEIGHT // 2 + 80))
+        help_width = help_text.get_width() + 20
+        help_height = help_text.get_height() + 10
+        help_x = WINDOW_WIDTH // 2 - help_width // 2
+        help_y = WINDOW_HEIGHT // 2 + 80
+        
+        # Draw background box
+        pygame.draw.rect(surface, COLOR_BUTTON, 
+                        (help_x, help_y, help_width, help_height))
+        pygame.draw.rect(surface, (50, 50, 50), 
+                        (help_x, help_y, help_width, help_height), 1)
+        
+        # Draw text centered in the box
+        surface.blit(help_text, (WINDOW_WIDTH // 2 - help_text.get_width() // 2, 
+                               help_y + 5))
     
     def draw_game(self, surface: pygame.Surface, board_state: Any, 
                   selected_square: Optional[chess.Square], 
@@ -772,22 +822,50 @@ class ChessUI:
         current_theme = settings_manager.get_theme()
         self.draw_theme_background(surface, current_theme)
         
-        # Draw title
+        # Draw title with background
         title = self.large_font.render("Settings", True, COLOR_TEXT)
-        surface.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, 80))
+        title_width = title.get_width() + 20
+        title_height = title.get_height() + 10
+        title_x = WINDOW_WIDTH // 2 - title_width // 2
+        title_y = 50
+        
+        pygame.draw.rect(surface, COLOR_BUTTON, 
+                        (title_x, title_y, title_width, title_height))
+        pygame.draw.rect(surface, (50, 50, 50), 
+                        (title_x, title_y, title_width, title_height), 1)
+        
+        surface.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, title_y + 5))
         
         # Get mouse position for button updates
         mouse_pos = pygame.mouse.get_pos()
         
-        # Draw theme buttons
+        # Draw theme label with background
         theme_title = self.medium_font.render("Board Themes:", True, COLOR_TEXT)
-        surface.blit(theme_title, (WINDOW_WIDTH // 2 - theme_title.get_width() // 2, 130))
+        theme_title_width = theme_title.get_width() + 20
+        theme_title_height = theme_title.get_height() + 6
+        theme_title_x = WINDOW_WIDTH // 2 - theme_title_width // 2
+        theme_title_y = 100
+        
+        pygame.draw.rect(surface, COLOR_BUTTON, 
+                        (theme_title_x, theme_title_y, theme_title_width, theme_title_height))
+        pygame.draw.rect(surface, (50, 50, 50), 
+                        (theme_title_x, theme_title_y, theme_title_width, theme_title_height), 1)
+        
+        surface.blit(theme_title, (WINDOW_WIDTH // 2 - theme_title.get_width() // 2, theme_title_y + 3))
         
         # Import THEMES here to avoid circular imports
         from modules.settings import THEMES
         
+        # Draw theme buttons with adequate spacing
+        button_y_start = 140
+        button_spacing = 10
         current_theme = settings_manager.get_theme()
-        for theme_name, button in self.theme_buttons.items():
+        
+        # Adjust button positions
+        for i, (theme_name, button) in enumerate(self.theme_buttons.items()):
+            # Update button position to ensure proper spacing
+            button.rect.y = button_y_start + i * (button.rect.height + button_spacing)
+            
             # Highlight the current theme
             if theme_name == current_theme:
                 button.color = (100, 120, 160)
@@ -813,11 +891,21 @@ class ChessUI:
                                      preview_y + j * preview_size, 
                                      preview_size, preview_size))
         
+        # Calculate music button position
+        last_theme_button = list(self.theme_buttons.values())[-1]
+        music_button_y = last_theme_button.rect.bottom + 20
+        
+        # Update music toggle button position
+        self.music_toggle_button.rect.y = music_button_y
+        
         # Draw music toggle button
         music_state = "On" if settings_manager.is_music_enabled() else "Off"
         self.music_toggle_button.update_text(f"Music: {music_state}")
         self.music_toggle_button.update(mouse_pos)
         self.music_toggle_button.draw(surface)
+        
+        # Update back button position
+        self.back_button.rect.y = music_button_y + 60
         
         # Update back button text based on where we should return to
         back_text = "Back to Game" if return_to_game else "Back to Menu"
@@ -825,10 +913,20 @@ class ChessUI:
         self.back_button.update(mouse_pos)
         self.back_button.draw(surface)
         
-        # Draw help text
+        # Draw help text with background
         help_text = self.small_font.render("Choose a theme and toggle music", True, COLOR_TEXT)
+        help_width = help_text.get_width() + 20
+        help_height = help_text.get_height() + 10
+        help_x = WINDOW_WIDTH // 2 - help_width // 2
+        help_y = self.music_toggle_button.rect.bottom + 20
+        
+        pygame.draw.rect(surface, COLOR_BUTTON, 
+                        (help_x, help_y, help_width, help_height))
+        pygame.draw.rect(surface, (50, 50, 50), 
+                        (help_x, help_y, help_width, help_height), 1)
+        
         surface.blit(help_text, (WINDOW_WIDTH // 2 - help_text.get_width() // 2, 
-                                self.music_toggle_button.rect.bottom + 20))
+                               help_y + 5))
     
     def draw_captured_pieces(self, surface: pygame.Surface, board_state: Any) -> None:
         """Draw captured pieces on the side of the board"""

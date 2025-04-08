@@ -18,8 +18,8 @@ THEME_MOONLIGHT = "moonlight"
 # Define themes with their color schemes
 THEMES = {
     THEME_DEFAULT: {
-        "light_square": (240, 217, 181),
-        "dark_square": (181, 136, 99),
+        "light_square": (238, 238, 210),  # Light cream/white
+        "dark_square": (118, 150, 86),    # Green
         "background": (40, 44, 52),
         "text": (220, 220, 220),
         "highlight": (255, 255, 100, 120),
@@ -30,8 +30,8 @@ THEMES = {
         "light_gray": (100, 100, 100)
     },
     THEME_WOODEN: {
-        "light_square": (240, 217, 181),
-        "dark_square": (133, 94, 66),
+        "light_square": (240, 217, 181),  # Light wood
+        "dark_square": (133, 94, 66),     # Dark wood
         "background": (110, 80, 60),
         "text": (240, 230, 210),
         "highlight": (255, 255, 100, 120),
@@ -42,8 +42,8 @@ THEMES = {
         "light_gray": (150, 120, 100)
     },
     THEME_DARK: {
-        "light_square": (100, 100, 100),
-        "dark_square": (60, 60, 60),
+        "light_square": (100, 100, 100),  # Light gray
+        "dark_square": (60, 60, 60),      # Dark gray
         "background": (30, 30, 30),
         "text": (200, 200, 200),
         "highlight": (180, 180, 120, 120),
@@ -54,8 +54,8 @@ THEMES = {
         "light_gray": (80, 80, 80)
     },
     THEME_ROYAL: {
-        "light_square": (225, 200, 170),
-        "dark_square": (150, 40, 40),
+        "light_square": (225, 200, 170),  # Light cream
+        "dark_square": (150, 40, 40),     # Dark red
         "background": (60, 10, 10),
         "text": (240, 220, 190),
         "highlight": (255, 255, 150, 120),
@@ -66,8 +66,8 @@ THEMES = {
         "light_gray": (120, 60, 60)
     },
     THEME_MOONLIGHT: {
-        "light_square": (220, 230, 240),
-        "dark_square": (70, 90, 120),
+        "light_square": (220, 230, 240),  # Light blue
+        "dark_square": (70, 90, 120),     # Dark blue
         "background": (30, 40, 60),
         "text": (220, 230, 240),
         "highlight": (180, 200, 255, 120),
