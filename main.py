@@ -1,8 +1,9 @@
 """
-Primary application flow with:
-- State management (menu/game/result)
-- Event handling
-- Render pipeline
+Main application flow for the chess game.
+Handles:
+- State management (menu, gameplay, results).
+- Event handling for user input.
+- Rendering the game interface.
 """
 import os
 import sys
@@ -30,7 +31,7 @@ GAME_MODE_SETTINGS = 3
 
 class ChessGame:
     def __init__(self) -> None:
-        """Initialize the chess application with all required modules"""
+        """Initialize the chess game and all its components."""
         # Initialize pygame
         pygame.init()
         pygame.display.set_caption(WINDOW_TITLE)
@@ -108,13 +109,13 @@ class ChessGame:
     
     def calculate_ai_rating(self, skill_level: int) -> int:
         """
-        Calculate the AI rating based on skill level
-        
+        Estimate the AI's ELO rating based on its skill level.
+
         Args:
-            skill_level: Skill level (0-20)
-        
+            skill_level: AI skill level (0-20).
+
         Returns:
-            Calculated AI rating
+            The estimated ELO rating.
         """
         if skill_level == 0:
             # "Martin" level - complete beginner (like on chess.com)
@@ -135,7 +136,7 @@ class ChessGame:
             return 1400 + ((skill_level - 10) * 150)
     
     def run(self) -> None:
-        """Main game loop"""
+        """Run the main game loop."""
         running = True
         while running:
             self.handle_events()
@@ -144,7 +145,7 @@ class ChessGame:
             self.clock.tick(FPS)
     
     def handle_events(self) -> None:
-        """Handle user input events"""
+        """Process user input events."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.quit()
@@ -177,10 +178,10 @@ class ChessGame:
     
     def handle_mouse_click(self, pos: Tuple[int, int]) -> None:
         """
-        Handle mouse click event
-        
+        Handle mouse click events.
+
         Args:
-            pos: (x, y) position of the click
+            pos: The (x, y) position of the mouse click.
         """
         # Check for universal back button click first
         if self.ui.universal_back_button.is_clicked(pos):
@@ -299,10 +300,10 @@ class ChessGame:
     
     def navigate_move_history(self, direction: int) -> None:
         """
-        Navigate through the move history
-        
+        Navigate through the move history.
+
         Args:
-            direction: -1 to go back, 1 to go forward
+            direction: -1 to go back, 1 to go forward.
         """
         # First time entering history mode
         if not self.viewing_history:
@@ -340,7 +341,7 @@ class ChessGame:
             self.history_board = None
     
     def handle_back_button(self) -> None:
-        """Handle universal back button clicks"""
+        """Handle clicks on the universal back button."""
         if self.game_mode == GAME_MODE_SETTINGS:
             # Return to previous mode (menu or game)
             self.game_mode = self.previous_mode
@@ -363,7 +364,7 @@ class ChessGame:
             self.show_color_selection = True
     
     def apply_settings(self) -> None:
-        """Apply current settings to the game"""
+        """Apply the current settings to the game."""
         theme = self.settings.get_theme()
         theme_colors = self.settings.get_theme_colors()
         
@@ -384,7 +385,7 @@ class ChessGame:
         self.audio.set_volume(self.settings.get_volume())
     
     def start_background_music(self) -> None:
-        """Start playing background music based on settings"""
+        """Play background music if enabled in settings."""
         if self.settings.is_music_enabled():
             music_dir = "assets/sounds/background_music"
             
@@ -404,7 +405,7 @@ class ChessGame:
                     print(f"Playing music: {random_music}")
     
     def handle_board_click(self, square: chess.Square) -> None:
-        """Handle clicks on the chess board during gameplay"""
+        """Handle clicks on the chessboard during gameplay."""
         # If no square is selected yet
         if self.selected_square is None:
             piece = self.board.board.piece_at(square)
@@ -434,7 +435,7 @@ class ChessGame:
             self.highlighted_squares = []
     
     def make_move(self, move: chess.Move) -> None:
-        """Make a move on the board"""
+        """Execute a move on the board."""
         # Make the move on the board
         self.board.make_move(move)
         
@@ -458,7 +459,7 @@ class ChessGame:
         self.check_game_end()
     
     def update(self) -> None:
-        """Update game state"""
+        """Update the game state and animations."""
         # Update animations
         animation_complete = not self.ui.update_animations()
         if animation_complete:
@@ -551,7 +552,7 @@ class ChessGame:
                     self.game_mode = GAME_MODE_RESULT
     
     def check_game_end(self) -> bool:
-        """Check if the game has ended"""
+        """Check if the game has ended and handle the result."""
         # Get the game state (which is a dictionary, not a string)
         state_dict = self.board.get_game_state()
         
@@ -575,7 +576,7 @@ class ChessGame:
         return False
     
     def render(self) -> None:
-        """Render the game based on current mode"""
+        """Render the game interface based on the current mode."""
         # Clear the screen
         self.screen.fill(COLOR_BACKGROUND)
         
@@ -598,7 +599,7 @@ class ChessGame:
         pygame.display.flip()
 
     def render_color_selection(self) -> None:
-        """Render the color selection screen"""
+        """Render the screen for selecting player color."""
         # Draw background with current theme
         self.ui.draw_theme_background(self.screen, self.settings.get_theme())
         
@@ -606,7 +607,7 @@ class ChessGame:
         self.ui.draw_color_selection(self.screen)
 
     def render_hint_selection(self) -> None:
-        """Render the hint selection screen"""
+        """Render the screen for selecting the number of hints."""
         # Draw background with current theme
         self.ui.draw_theme_background(self.screen, self.settings.get_theme())
         
@@ -614,7 +615,7 @@ class ChessGame:
         self.ui.draw_hint_selection(self.screen)
 
     def render_game(self) -> None:
-        """Render the game board and UI"""
+        """Render the chessboard and in-game UI."""
         # Use the updated draw_game method with theme support
         self.ui.draw_game(
             self.screen,
@@ -643,12 +644,12 @@ class ChessGame:
                 self.ui.draw_result_overlay(self.screen, is_winner)
     
     def render_menu(self) -> None:
-        """Render the main menu"""
+        """Render the main menu screen."""
         # Draw the menu UI with current theme
         self.ui.draw_menu(self.screen, self.ai_skill_level, self.ai_rating, self.settings.get_theme())
 
     def render_result(self) -> None:
-        """Render the game result screen"""
+        """Render the game result screen."""
         # Clear screen
         self.screen.fill(COLOR_BACKGROUND)
         
@@ -656,7 +657,7 @@ class ChessGame:
         self.ui.draw_game_result(self.screen, self.game_result_message, self.ai_rating)
 
     def render_settings(self) -> None:
-        """Render the settings screen"""
+        """Render the settings screen."""
         # Determine if we should return to game when back is clicked
         return_to_game = (self.previous_mode == GAME_MODE_PLAY)
         
@@ -664,7 +665,7 @@ class ChessGame:
         self.ui.draw_settings(self.screen, self.settings, return_to_game)
     
     def new_game(self) -> None:
-        """Start a new chess game"""
+        """Start a new chess game."""
         # Show color selection first
         self.show_color_selection = True
         self.show_hint_selection = False
@@ -675,7 +676,7 @@ class ChessGame:
         self.game_mode = GAME_MODE_MENU
 
     def start_game_with_color(self, color: chess.Color) -> None:
-        """Start a new game with the selected color"""
+        """Begin a new game with the selected player color."""
         # Initialize a new board
         self.board = GameBoard()
         
@@ -705,7 +706,7 @@ class ChessGame:
         self.show_color_selection = False
 
     def set_hints(self, num_hints: int) -> None:
-        """Set the number of hints available to the player"""
+        """Set the number of hints available to the player."""
         self.hints_remaining = num_hints
         self.hint_selected = True
         self.show_hint_selection = False
@@ -718,7 +719,7 @@ class ChessGame:
             self.make_ai_move()
 
     def show_hint(self) -> None:
-        """Show a hint by asking the engine for the best move"""
+        """Display a hint for the player's next move."""
         if not self.engine or not self.human_turn or self.hints_remaining <= 0:
             return
         
@@ -763,7 +764,7 @@ class ChessGame:
             print("Hint calculation timed out")
 
     def make_ai_move(self) -> None:
-        """Make a move with the AI"""
+        """Make a move for the AI."""
         # If AI is not yet thinking, start the move calculation
         if not self.ai_thinking:
             self.ai_thinking = True
@@ -799,7 +800,7 @@ class ChessGame:
                 self.check_game_end()
 
     def quit(self) -> None:
-        """Clean up resources and exit the game"""
+        """Clean up resources and exit the game."""
         # Close engine
         if self.engine:
             self.engine.close()
@@ -811,7 +812,7 @@ class ChessGame:
         sys.exit()
     
     def show_error_and_exit(self, message: str) -> None:
-        """Display error message and exit"""
+        """Display an error message and exit the application."""
         print(f"ERROR: {message}")
         
         # Try to show error on screen

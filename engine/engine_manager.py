@@ -1,9 +1,9 @@
 """
-Stockfish wrapper with adaptive difficulty
-Required Features:
-- Skill levels 0-20 (mapped to ELO 800-2000)
-- Move time calculation based on difficulty
-- Proper resource cleanup
+Stockfish wrapper with adaptive difficulty.
+Features:
+- Skill levels from 0 to 20 (mapped to ELO 800-2000).
+- Dynamically calculated move times based on difficulty.
+- Proper resource cleanup to avoid memory leaks.
 """
 import chess
 import chess.engine
@@ -13,7 +13,7 @@ from typing import Dict, Any, Optional
 
 class ChessEngine:
     def __init__(self, engine_path: str = None) -> None:
-        """Initialize the chess engine"""
+        """Set up the chess engine with an optional custom path."""
         self.engine = None
         self.engine_path = engine_path or os.path.join(
             os.path.dirname(__file__), 
@@ -21,7 +21,7 @@ class ChessEngine:
         )
         
     def init_engine(self) -> None:
-        """Initialize and configure the Stockfish engine"""
+        """Start and configure the Stockfish engine."""
         if not os.path.exists(self.engine_path):
             raise FileNotFoundError(
                 f"Stockfish executable not found at {self.engine_path}.\n"
@@ -57,20 +57,20 @@ class ChessEngine:
             ) from e
     
     def close(self) -> None:
-        """Close the engine"""
+        """Shut down the engine gracefully."""
         if self.engine:
             self.engine.quit()
     
     def get_move(self, board: chess.Board, difficulty: int) -> Optional[chess.Move]:
         """
-        Get the best move from the engine for the current position
-        
+        Get the best move from the engine for the current board position.
+
         Args:
-            board: Current chess position
-            difficulty: Skill level (0-20)
-        
+            board: The current chess board state.
+            difficulty: AI skill level (0-20).
+
         Returns:
-            Best move according to the engine
+            The best move as determined by the engine.
         """
         if not self.engine:
             return None
@@ -97,14 +97,14 @@ class ChessEngine:
         
     def _get_beginner_move(self, board: chess.Board, difficulty: int) -> Optional[chess.Move]:
         """
-        Get a move that simulates a beginner player at the specified difficulty
-        
+        Simulate beginner-level play by introducing deliberate mistakes.
+
         Args:
-            board: Current chess position
-            difficulty: Skill level (0-4)
-        
+            board: The current chess board state.
+            difficulty: Skill level (0-4).
+
         Returns:
-            A move chosen to simulate beginner play
+            A move that mimics beginner behavior.
         """
         try:
             # For extreme beginner level (level 0), sometimes make very poor moves
@@ -205,10 +205,10 @@ class ChessEngine:
 
     def is_move_ready(self) -> bool:
         """
-        Check if the engine has finished calculating a move
-        
+        Check if the engine has finished calculating a move.
+
         Returns:
-            True if a move is ready, False otherwise
+            True if a move is ready, False otherwise.
         """
         if hasattr(self, '_calculated_move') and self._calculated_move:
             return True
@@ -216,10 +216,10 @@ class ChessEngine:
 
     def get_calculated_move(self) -> Optional[chess.Move]:
         """
-        Get the calculated move once it's ready
-        
+        Retrieve the move calculated by the engine.
+
         Returns:
-            The best move or None if not ready
+            The calculated move or None if not ready.
         """
         if hasattr(self, '_calculated_move') and self._calculated_move:
             try:
@@ -235,14 +235,14 @@ class ChessEngine:
 
     def analyze_position(self, board: chess.Board, depth: int = 15) -> Dict[str, Any]:
         """
-        Analyze the current position at a deeper level for evaluation
-        
+        Perform a deeper analysis of the current position.
+
         Args:
-            board: Current chess board state
-            depth: Search depth for analysis
-            
+            board: The current chess board state.
+            depth: The search depth for analysis.
+
         Returns:
-            Dictionary with analysis results
+            A dictionary containing analysis results.
         """
         # Configure engine for analysis (max strength)
         if "UCI_LimitStrength" in self.engine.options:
@@ -265,16 +265,16 @@ class ChessEngine:
         return result
     
     def get_elo_from_skill(self, skill_level: int) -> int:
-        """Convert skill level to approximate ELO rating"""
+        """Convert a skill level (0-20) to an approximate ELO rating."""
         skill_level = max(0, min(20, skill_level))
         return 800 + (skill_level * 60)  # Linear approximation
 
     def set_difficulty(self, skill_level: int) -> None:
         """
-        Set the engine difficulty level
-        
+        Adjust the engine's difficulty level.
+
         Args:
-            skill_level: Skill level (0-20)
+            skill_level: AI skill level (0-20).
         """
         if not self.engine:
             return
@@ -308,13 +308,13 @@ class ChessEngine:
 
     def _get_time_limit(self, difficulty: int) -> float:
         """
-        Calculate the time limit for the engine based on difficulty
-        
+        Calculate the time limit for the engine based on difficulty.
+
         Args:
-            difficulty: Skill level (0-20)
-        
+            difficulty: AI skill level (0-20).
+
         Returns:
-            Time limit in seconds
+            The time limit in seconds.
         """
         # Calculate appropriate time limit based on difficulty
         # Higher difficulty gets more time to think
