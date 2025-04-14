@@ -1,3 +1,5 @@
+import chess
+
 class ChessEngine:
     def __init__(self):
         self.board = None  # This will hold the current state of the chessboard

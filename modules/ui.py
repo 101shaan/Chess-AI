@@ -1,9 +1,7 @@
 """
-Modern chess interface with:
-- Animated piece movement
-- Legal move highlighting
-- Move history display
-- AI rating tracker
+this handles the user interface for the chess game:
+- manages drawing the board, pieces, and ui elements
+- supports animations, themes, and user interactions
 """
 import pygame
 import chess
@@ -174,10 +172,10 @@ class Animation:
         return (x + SQUARE_SIZE // 2, y + SQUARE_SIZE // 2)
 
 class ChessUI:
-    """Chess game UI handler"""
+    """handles all the ui stuff for the chess game"""
     
     def __init__(self):
-        """Initialize the UI"""
+        """sets up the ui components and loads assets."""
         # Initialize pygame fonts
         pygame.font.init()
         
@@ -536,14 +534,7 @@ class ChessUI:
         return chess.square(file_idx, rank_idx)
     
     def draw_board(self, surface: pygame.Surface, board_state: Any, current_theme: str = "default") -> None:
-        """
-        Draw the chess board with pieces and highlights
-        
-        Args:
-            surface: Pygame surface to draw on
-            board_state: GameBoard object containing the chess state
-            current_theme: Current theme name
-        """
+        """draws the chessboard with the current theme."""
         # Import THEMES and current theme for proper square coloring
         from modules.settings import THEMES
         import os
@@ -651,7 +642,7 @@ class ChessUI:
             surface.blit(text, (x_left, y))
     
     def draw_pieces(self, surface: pygame.Surface, board_state: Any) -> None:
-        """Draw chess pieces on the board"""
+        """draws the chess pieces on the board."""
         # Skip if no board state
         if not board_state or not hasattr(board_state, 'board'):
             return
@@ -768,15 +759,7 @@ class ChessUI:
                         selected_square: Optional[chess.Square], 
                         highlighted_squares: List[chess.Square],
                         hint_move: Optional[chess.Move] = None) -> None:
-        """
-        Draw move highlights on the board
-        
-        Args:
-            surface: Pygame surface to draw on
-            selected_square: Currently selected square
-            highlighted_squares: Legal move squares to highlight
-            hint_move: Optional hint move to highlight differently
-        """
+        """draws highlights for selected squares, legal moves, and hints."""
         # Draw selected square highlight
         if selected_square is not None:
             x, y = self.square_to_coords(selected_square)
@@ -808,16 +791,11 @@ class ChessUI:
             pygame.draw.circle(surface, circle_color, circle_center, circle_radius)    # Yellow/green fill
     
     def animate_move(self, move: chess.Move, board: chess.Board) -> None:
-        """Start a new piece animation for a move"""
+        """starts an animation for a piece move."""
         self.animations.append(Animation(move, board, self))
     
     def update_animations(self) -> bool:
-        """
-        Update all animations and remove completed ones
-        
-        Returns:
-            True if there are still animations in progress, False otherwise
-        """
+        """updates ongoing animations and removes completed ones."""
         # Update progress for all animations
         for anim in self.animations:
             anim.update()
@@ -829,7 +807,7 @@ class ChessUI:
         return len(self.animations) > 0
     
     def draw_menu(self, surface: pygame.Surface, difficulty: int, ai_rating: int, current_theme: str = "default") -> None:
-        """Draw the main menu interface"""
+        """draws the main menu interface."""
         # Draw background based on current theme
         self.draw_theme_background(surface, current_theme)
         
@@ -983,14 +961,7 @@ class ChessUI:
             surface.blit(history_msg, msg_rect)
     
     def draw_settings(self, surface: pygame.Surface, settings_manager, return_to_game: bool = False) -> None:
-        """
-        Draw the settings interface
-        
-        Args:
-            surface: Pygame surface to draw on
-            settings_manager: Settings manager instance
-            return_to_game: Whether to return to game when back is clicked
-        """
+        """draws the settings screen."""
         # Draw background based on current theme
         current_theme = settings_manager.get_theme()
         self.draw_theme_background(surface, current_theme)
@@ -1248,7 +1219,7 @@ class ChessUI:
         surface.blit(ai_surface, (20, 20))
     
     def draw_game_result(self, surface: pygame.Surface, result_message: str, ai_rating: int) -> None:
-        """Draw the game result screen"""
+        """draws the game result screen."""
         # Draw semi-transparent overlay
         overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 180))  # Black with alpha

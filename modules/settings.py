@@ -1,8 +1,6 @@
 """
-Settings manager for Chess AI:
-- Theme management
-- Audio settings
-- Game preferences
+this manages all the settings for the chess ai:
+- handles themes, audio, and game preferences
 """
 import os
 import json
@@ -80,14 +78,11 @@ THEMES = {
 }
 
 class SettingsManager:
-    """Manages application settings and preferences"""
+    """manages application settings and preferences"""
     
     def __init__(self, settings_file: str = "settings.json") -> None:
         """
-        Initialize settings manager
-        
-        Args:
-            settings_file: Path to settings file
+        sets up the settings manager and loads settings from a file.
         """
         self.settings_file = settings_file
         self.settings = self._load_settings()
@@ -103,7 +98,7 @@ class SettingsManager:
             self.save()
     
     def _load_settings(self) -> Dict[str, Any]:
-        """Load settings from file"""
+        """loads settings from a file if it exists."""
         if os.path.exists(self.settings_file):
             try:
                 with open(self.settings_file, 'r') as f:
@@ -114,7 +109,7 @@ class SettingsManager:
         return {}
     
     def save(self) -> bool:
-        """Save settings to file"""
+        """saves the current settings to a file."""
         try:
             with open(self.settings_file, 'w') as f:
                 json.dump(self.settings, f, indent=4)
@@ -124,49 +119,49 @@ class SettingsManager:
             return False
     
     def get_theme(self) -> str:
-        """Get current theme name"""
+        """gets the name of the current theme."""
         return self.settings.get("theme", THEME_DEFAULT)
     
     def set_theme(self, theme: str) -> None:
-        """Set theme by name"""
+        """sets the theme by its name."""
         if theme in THEMES:
             self.settings["theme"] = theme
             self.save()
     
     def get_theme_colors(self) -> Dict[str, Any]:
-        """Get colors for current theme"""
+        """gets the color scheme for the current theme."""
         theme_name = self.get_theme()
         return THEMES.get(theme_name, THEMES[THEME_DEFAULT])
     
     def is_music_enabled(self) -> bool:
-        """Check if background music is enabled"""
+        """checks if background music is enabled."""
         return self.settings.get("music_enabled", True)
     
     def set_music_enabled(self, enabled: bool) -> None:
-        """Set background music enabled/disabled"""
+        """enables or disables background music."""
         self.settings["music_enabled"] = enabled
         self.save()
     
     def get_current_music(self) -> str:
-        """Get current music file"""
+        """gets the file name of the current background music."""
         return self.settings.get("current_music", "background_music1.mp3")
     
     def set_current_music(self, music_file: str) -> None:
-        """Set current music file"""
+        """sets the file name for the background music."""
         self.settings["current_music"] = music_file
         self.save()
     
     def get_volume(self) -> float:
-        """Get volume level"""
+        """gets the current volume level."""
         return self.settings.get("volume", 0.7)
     
     def set_volume(self, volume: float) -> None:
-        """Set volume level"""
+        """sets the volume level (clamped between 0.0 and 1.0)."""
         self.settings["volume"] = max(0.0, min(1.0, volume))
         self.save()
     
     def get_available_music(self, music_dir: str = "assets/sounds/background_music") -> List[str]:
-        """Get list of available music files"""
+        """gets a list of available music files in the specified directory."""
         music_files = []
         if os.path.exists(music_dir):
             for file in os.listdir(music_dir):

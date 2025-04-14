@@ -1,9 +1,8 @@
 """
-Sound effects manager with:
-- Move sounds
-- Capture sounds
-- Check/checkmate sounds
-- Volume control
+this handles all the audio stuff:
+- plays sound effects and background music
+- manages volume settings
+- supports multiple audio formats
 """
 import os
 import pygame
@@ -20,12 +19,7 @@ class AudioManager:
     }
     
     def __init__(self, sound_dir: str = "assets/sounds/") -> None:
-        """
-        Initialize the audio manager with sound effects
-        
-        Args:
-            sound_dir: Directory containing sound files
-        """
+        """sets up the audio manager and loads sound files."""
         # Initialize sound mixer if not already done
         if not pygame.mixer.get_init():
             pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
@@ -95,22 +89,12 @@ class AudioManager:
             return False
     
     def play(self, sound_type: str) -> None:
-        """
-        Play a sound effect
-        
-        Args:
-            sound_type: Type of sound to play ('move', 'capture', 'check', etc.)
-        """
+        """plays a specific sound effect."""
         if sound_type in self.sounds and self.sounds[sound_type]:
             self.sounds[sound_type].play()
     
     def set_volume(self, volume: float) -> None:
-        """
-        Set the volume for all sound effects
-        
-        Args:
-            volume: Volume level (0.0 to 1.0)
-        """
+        """adjusts the volume for all sounds and music."""
         # Ensure volume is in valid range
         self.volume = max(0.0, min(1.0, volume))
         
@@ -135,13 +119,7 @@ class AudioManager:
             self.set_volume(0.7)  # Default value
     
     def play_music(self, music_file: str, loops: int = -1) -> None:
-        """
-        Play background music
-        
-        Args:
-            music_file: Path to music file
-            loops: Number of times to loop (-1 for infinite)
-        """
+        """starts playing background music from the given file."""
         if os.path.exists(music_file):
             try:
                 pygame.mixer.music.load(music_file)
@@ -150,7 +128,7 @@ class AudioManager:
                 print(f"Could not play music {music_file}: {e}")
     
     def stop_music(self) -> None:
-        """Stop currently playing background music"""
+        """stops the currently playing background music."""
         pygame.mixer.music.stop()
     
     def pause_music(self) -> None:

@@ -1,8 +1,8 @@
 """
-Player/AI rating tracker with:
-- Dynamic difficulty adjustment
-- Game outcome processing
-- Rating visualization
+this tracks player and ai ratings:
+- adjusts difficulty dynamically
+- processes game outcomes
+- visualizes rating trends
 """
 import math
 from typing import Tuple, Dict, List, Optional
@@ -12,12 +12,7 @@ import os
 class ELOManager:
     def __init__(self, player_elo: int = 1200, ai_elo: int = 1200, save_file: str = "ratings.json") -> None:
         """
-        Initialize the ELO rating manager
-        
-        Args:
-            player_elo: Initial player ELO rating
-            ai_elo: Initial AI ELO rating
-            save_file: File to save ratings to
+        sets up the elo manager with initial ratings and a save file.
         """
         self.player_elo = player_elo
         self.ai_elo = ai_elo
@@ -30,13 +25,7 @@ class ELOManager:
     
     def update_ratings(self, outcome: str) -> Tuple[int, int]:
         """
-        Update player and AI ratings based on game outcome
-        
-        Args:
-            outcome: Game result ('win', 'loss', or 'draw')
-            
-        Returns:
-            Tuple of (player_rating_change, ai_rating_change)
+        updates player and ai ratings based on the game result.
         """
         # Convert outcome to score (1.0 for win, 0.5 for draw, 0.0 for loss)
         player_score = 1.0 if outcome == "win" else (0.5 if outcome == "draw" else 0.0)
@@ -68,23 +57,13 @@ class ELOManager:
     
     def _get_expected_score(self, rating_a: int, rating_b: int) -> float:
         """
-        Calculate expected score using the ELO formula
-        
-        Args:
-            rating_a: First player's rating
-            rating_b: Second player's rating
-            
-        Returns:
-            Expected score for player A (between 0 and 1)
+        calculates the expected score for a player using the elo formula.
         """
         return 1.0 / (1.0 + pow(10, (rating_b - rating_a) / 400.0))
     
     def get_suggested_ai_level(self) -> int:
         """
-        Get suggested AI level based on player's ELO
-        
-        Returns:
-            AI skill level (0-20) that approximately matches player strength
+        suggests an ai level based on the player's current elo.
         """
         # Map player ELO to AI skill level (approximation)
         # This mapping is designed so that:
@@ -103,32 +82,21 @@ class ELOManager:
     
     def set_player_elo(self, elo: int) -> None:
         """
-        Set the player's ELO rating
-        
-        Args:
-            elo: New ELO rating
+        updates the player's elo rating and saves it.
         """
         self.player_elo = max(100, elo)
         self.save_ratings()
     
     def set_ai_elo(self, elo: int) -> None:
         """
-        Set the AI's ELO rating
-        
-        Args:
-            elo: New ELO rating
+        updates the ai's elo rating and saves it.
         """
         self.ai_elo = max(800, elo)
         self.save_ratings()
     
     def _record_game(self, outcome: str, player_change: int, ai_change: int) -> None:
         """
-        Record a game result in history
-        
-        Args:
-            outcome: Game result
-            player_change: Change in player's rating
-            ai_change: Change in AI's rating
+        logs the game result and rating changes in the history.
         """
         self.history.append({
             "outcome": outcome,
@@ -144,10 +112,7 @@ class ELOManager:
     
     def get_win_loss_ratio(self) -> Tuple[int, int, int]:
         """
-        Get player's win/loss/draw counts
-        
-        Returns:
-            Tuple of (wins, losses, draws)
+        calculates the player's win/loss/draw counts from the history.
         """
         wins = sum(1 for game in self.history if game["outcome"] == "win")
         losses = sum(1 for game in self.history if game["outcome"] == "loss")
@@ -157,10 +122,7 @@ class ELOManager:
     
     def get_performance_trend(self) -> List[int]:
         """
-        Get player's rating trend over last 10 games
-        
-        Returns:
-            List of player's rating after each game (most recent 10)
+        gets the player's rating trend over the last 10 games.
         """
         if not self.history:
             return [self.player_elo]
@@ -172,7 +134,9 @@ class ELOManager:
         return [game["player_elo"] for game in recent]
     
     def save_ratings(self) -> None:
-        """Save ratings to a file"""
+        """
+        saves the current ratings and history to a file.
+        """
         try:
             data = {
                 "player_elo": self.player_elo,
@@ -187,10 +151,7 @@ class ELOManager:
     
     def load_ratings(self) -> bool:
         """
-        Load ratings from file
-        
-        Returns:
-            True if ratings were loaded successfully, False otherwise
+        loads ratings and history from a file if it exists.
         """
         if not os.path.exists(self.save_file):
             return False
