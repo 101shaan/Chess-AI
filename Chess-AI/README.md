@@ -1,15 +1,16 @@
 # Chess AI
 
 ## Overview
-Chess AI is a chess game that allows players to compete against each other or against an AI. The game features a user-friendly interface, customizable themes, and sound effects to enhance the gaming experience. Additionally, it includes a multiplayer mode for online play.
+Chess AI is a chess game that allows players to compete against each other or against an AI. The game features a user-friendly interface, customizable themes, sound effects, and advanced AI difficulty levels to enhance the gaming experience. Additionally, it includes a multiplayer mode for online play and a replay system to review past games.
 
 ## Features
-- Single-player mode against an AI opponent
+- Single-player mode against an AI opponent with adjustable difficulty levels
 - Online multiplayer mode for playing against friends
 - Customizable themes and sound effects
-- Move history navigation
+- Move history navigation and replay system
 - Hint system for assistance
 - Settings management for audio and visual preferences
+- Save and load game functionality
 
 ## Project Structure
 ```
@@ -23,16 +24,19 @@ Chess-AI
 │   ├── ui                     # User interface components
 │   │   ├── menu.py            # Main menu UI
 │   │   ├── game.py            # Game screen UI
-│   │   └── settings.py        # Settings UI
+│   │   ├── settings.py        # Settings UI
+│   │   └── replay.py          # Replay system UI
 │   ├── game                   # Game logic components
 │   │   ├── board.py           # Chessboard logic
 │   │   ├── engine.py          # Chess engine logic
-│   │   └── rules.py           # Chess rules
+│   │   ├── rules.py           # Chess rules
+│   │   └── save_load.py       # Save and load game logic
 │   └── assets                 # Game assets
 │       ├── sounds             # Sound files
 │       └── themes             # Theme files
 ├── requirements.txt           # Project dependencies
 ├── README.md                  # Project documentation
+├── LICENSE                    # License file
 └── .gitignore                 # Files to ignore in version control
 ```
 
