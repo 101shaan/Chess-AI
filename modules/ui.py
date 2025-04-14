@@ -239,46 +239,47 @@ class ChessUI:
             font_size=20
         )
         
-        # Main menu buttons - Adjusted positions for better spacing
+        # Main menu buttons - Adjusted positions for proper centering
         self.new_game_button = Button(
-            center_x - button_width // 2,
-            150,
+            WINDOW_WIDTH // 2 - button_width // 2,
+            200,
             button_width,
             button_height,
             "New Game"
         )
         
         self.settings_button = Button(
-            center_x - button_width // 2,
-            150 + button_height + button_spacing,
+            WINDOW_WIDTH // 2 - button_width // 2,
+            200 + button_height + button_spacing,
             button_width,
             button_height,
             "Settings"
         )
         
         self.quit_button = Button(
-            center_x - button_width // 2,
-            150 + (button_height + button_spacing) * 2,
+            WINDOW_WIDTH // 2 - button_width // 2,
+            200 + (button_height + button_spacing) * 2,
             button_width,
             button_height,
             "Quit"
         )
         
-        # Difficulty adjustment buttons
-        small_button_size = 40
+        # Removed the Local Multiplayer button from the main menu
+        
+        # Difficulty adjustment buttons (moved from main menu)
         self.difficulty_up_button = Button(
-            center_x + 100,
-            350,  # Moved down below quit button
-            small_button_size,
-            small_button_size,
+            WINDOW_WIDTH // 2 + 100,
+            300,  # Adjusted Y position for Player vs AI screen
+            40,
+            40,
             "+"
         )
         
         self.difficulty_down_button = Button(
-            center_x - 100 - small_button_size,
-            350,  # Moved down below quit button
-            small_button_size,
-            small_button_size,
+            WINDOW_WIDTH // 2 - 140,
+            300,  # Adjusted Y position for Player vs AI screen
+            40,
+            40,
             "-"
         )
         
@@ -350,6 +351,15 @@ class ChessUI:
             font_size=20
         )
         
+        # Confirm button for Player vs AI screen
+        self.confirm_button = Button(
+            center_x - button_width // 2,
+            400,
+            button_width,
+            button_height,
+            "Confirm"
+        )
+        
         # Settings screen buttons
         self.theme_buttons = {}
         theme_names = ["default", "wooden", "dark", "royal", "moonlight"]
@@ -400,6 +410,15 @@ class ChessUI:
         
         # Last square clicked
         self.last_click = None
+
+        self.player_vs_ai_button = Button(100, 200, 200, 50, "Player vs AI")
+        self.local_multiplayer_button = Button(100, 300, 200, 50, "Local Multiplayer")
+
+        # Message display
+        self.show_message = False
+        self.message_text = ""
+        self.message_start_time = 0
+        self.message_duration = 2.0  # Display messages for 2 seconds
     
     def load_pieces(self) -> Dict[str, pygame.Surface]:
         """Load chess piece images from assets folder"""
@@ -807,7 +826,7 @@ class ChessUI:
         return len(self.animations) > 0
     
     def draw_menu(self, surface: pygame.Surface, difficulty: int, ai_rating: int, current_theme: str = "default") -> None:
-        """draws the main menu interface."""
+        """Draws the main menu interface."""
         # Draw background based on current theme
         self.draw_theme_background(surface, current_theme)
         
@@ -824,48 +843,9 @@ class ChessUI:
         self.quit_button.update(mouse_pos)
         self.quit_button.draw(surface)
         
-        # Calculate AI ELO based on difficulty level
-        ai_elo = 800 + (difficulty * 75)  # Approximate ELO based on skill level
-        
-        # Draw AI rating with background for better visibility
-        ai_label = self.medium_font.render(f"AI Rating: {ai_rating}", True, COLOR_TEXT)
-        rating_width = ai_label.get_width() + 20
-        rating_height = ai_label.get_height() + 10
-        rating_x = WINDOW_WIDTH // 2 - rating_width // 2
-        rating_y = WINDOW_HEIGHT // 2 + 40
-        
-        # Draw background box
-        pygame.draw.rect(surface, COLOR_BUTTON, 
-                        (rating_x, rating_y, rating_width, rating_height))
-        pygame.draw.rect(surface, (50, 50, 50), 
-                        (rating_x, rating_y, rating_width, rating_height), 1)
-        
-        # Draw text centered in the box
-        surface.blit(ai_label, (WINDOW_WIDTH // 2 - ai_label.get_width() // 2, 
-                              rating_y + 5))
-        
-        # Update difficulty buttons
-        self.difficulty_up_button.update(mouse_pos)
-        self.difficulty_down_button.update(mouse_pos)
-        self.difficulty_up_button.draw(surface)
-        self.difficulty_down_button.draw(surface)
-        
-        # Draw difficulty help text with background
-        help_text = self.small_font.render("Use +/- buttons to adjust AI strength", True, COLOR_TEXT)
-        help_width = help_text.get_width() + 20
-        help_height = help_text.get_height() + 10
-        help_x = WINDOW_WIDTH // 2 - help_width // 2
-        help_y = WINDOW_HEIGHT // 2 + 80
-        
-        # Draw background box
-        pygame.draw.rect(surface, COLOR_BUTTON, 
-                        (help_x, help_y, help_width, help_height))
-        pygame.draw.rect(surface, (50, 50, 50), 
-                        (help_x, help_y, help_width, help_height), 1)
-        
-        # Draw text centered in the box
-        surface.blit(help_text, (WINDOW_WIDTH // 2 - help_text.get_width() // 2, 
-                               help_y + 5))
+        # Draw universal back button
+        self.universal_back_button.update(mouse_pos)
+        self.universal_back_button.draw(surface)
     
     def draw_game(self, surface: pygame.Surface, board_state: Any, 
                   selected_square: Optional[chess.Square], 
@@ -1083,6 +1063,131 @@ class ChessUI:
         # Draw universal back button
         self.universal_back_button.update(mouse_pos)
         self.universal_back_button.draw(surface)
+    
+    def draw_player_vs_ai_screen(self, surface: pygame.Surface, difficulty: int, ai_rating: int, selected_color: chess.Color = None) -> None:
+        """Draw the Player vs AI game mode selection screen with integrated color selection."""
+        # Draw background
+        self.draw_theme_background(surface, "default")
+        
+        # Draw title
+        title = self.large_font.render("Player vs AI", True, COLOR_TEXT)
+        surface.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, 100))
+        
+        # Center position for all elements
+        center_x = WINDOW_WIDTH // 2
+        
+        # Draw AI rating with background for better visibility
+        ai_label = self.medium_font.render(f"AI Rating: {ai_rating}", True, COLOR_TEXT)
+        rating_width = ai_label.get_width() + 40  # Make it wider to avoid overlap with buttons
+        rating_height = ai_label.get_height() + 10
+        rating_x = center_x - rating_width // 2
+        rating_y = 180  # Moved up to make room for color selection
+
+        # Draw rating background
+        pygame.draw.rect(surface, COLOR_BUTTON, 
+                        (rating_x, rating_y, rating_width, rating_height))
+        pygame.draw.rect(surface, (50, 50, 50), 
+                        (rating_x, rating_y, rating_width, rating_height), 1)
+        surface.blit(ai_label, (center_x - ai_label.get_width() // 2, 
+                              rating_y + 5))
+        
+        # Position and draw difficulty adjustment buttons
+        button_spacing = 20  # Space between rating box and buttons
+        self.difficulty_down_button.rect.x = rating_x - self.difficulty_down_button.rect.width - button_spacing
+        self.difficulty_down_button.rect.centery = rating_y + rating_height // 2
+        
+        self.difficulty_up_button.rect.x = rating_x + rating_width + button_spacing
+        self.difficulty_up_button.rect.centery = rating_y + rating_height // 2
+        
+        mouse_pos = pygame.mouse.get_pos()
+        self.difficulty_up_button.update(mouse_pos)
+        self.difficulty_down_button.update(mouse_pos)
+        self.difficulty_up_button.draw(surface)
+        self.difficulty_down_button.draw(surface)
+        
+        # Draw color selection section
+        color_section_y = 250
+        color_label = self.medium_font.render("Select a Color:", True, COLOR_TEXT)
+        surface.blit(color_label, (center_x - color_label.get_width() // 2, color_section_y))
+        
+        # Position color selection buttons
+        button_width = 120
+        button_height = 40
+        button_spacing = 20
+        total_width = (button_width * 3) + (button_spacing * 2)
+        start_x = center_x - total_width // 2
+        
+        # Define button positions
+        self.white_button.rect = pygame.Rect(start_x, color_section_y + 40, button_width, button_height)
+        self.black_button.rect = pygame.Rect(start_x + button_width + button_spacing, color_section_y + 40, button_width, button_height)
+        self.random_button.rect = pygame.Rect(start_x + (button_width + button_spacing) * 2, color_section_y + 40, button_width, button_height)
+
+        # Update button states
+        mouse_pos = pygame.mouse.get_pos()
+        self.white_button.update(mouse_pos)
+        self.black_button.update(mouse_pos)
+        self.random_button.update(mouse_pos)
+
+        # Draw buttons with special visuals for the selected one
+        if selected_color == chess.WHITE:
+            pygame.draw.rect(surface, (255, 255, 255), self.white_button.rect)  # White
+        else:
+            self.white_button.draw(surface)
+
+        if selected_color == chess.BLACK:
+            pygame.draw.rect(surface, (0, 0, 0), self.black_button.rect)  # Black
+        else:
+            self.black_button.draw(surface)
+
+        if selected_color == -1:  # Random
+            # Draw a half-white, half-black box
+            pygame.draw.rect(surface, (255, 255, 255), self.random_button.rect)  # White half
+            pygame.draw.rect(surface, (0, 0, 0), pygame.Rect(
+                self.random_button.rect.x + self.random_button.rect.width // 2,
+                self.random_button.rect.y,
+                self.random_button.rect.width // 2,
+                self.random_button.rect.height
+            ))  # Black half
+        else:
+            self.random_button.draw(surface)
+
+        # Draw confirm button
+        button_width = 200
+        button_height = 40
+        self.confirm_button.rect = pygame.Rect(
+            WINDOW_WIDTH // 2 - button_width // 2,
+            color_section_y + 100,
+            button_width,
+            button_height
+        )
+        self.confirm_button.update(mouse_pos)
+        self.confirm_button.draw(surface)
+
+        # Draw universal back button
+        self.universal_back_button.update(mouse_pos)
+        self.universal_back_button.draw(surface)
+        
+        # Display error message if needed
+        if self.show_message and time.time() - self.message_start_time < self.message_duration:
+            message_font = self.medium_font
+            message_surface = message_font.render(self.message_text, True, (255, 50, 50))  # Red text for error
+            
+            # Create a background for the message
+            msg_padding = 10
+            msg_bg_rect = pygame.Rect(
+                center_x - message_surface.get_width() // 2 - msg_padding,
+                color_section_y + 150,
+                message_surface.get_width() + msg_padding * 2,
+                message_surface.get_height() + msg_padding * 2
+            )
+            
+            # Draw semi-transparent background
+            s = pygame.Surface((msg_bg_rect.width, msg_bg_rect.height), pygame.SRCALPHA)
+            s.fill((0, 0, 0, 180))  # Black with alpha
+            surface.blit(s, (msg_bg_rect.x, msg_bg_rect.y))
+            
+            # Draw message
+            surface.blit(message_surface, (center_x - message_surface.get_width() // 2, color_section_y + 150 + msg_padding))
     
     def draw_captured_pieces(self, surface: pygame.Surface, board_state: Any) -> None:
         """Draw captured pieces on the side of the board"""
@@ -1347,7 +1452,7 @@ class ChessUI:
         surface.blit(overlay, (0, 0))
         
         # Space out the letters for more visual impact
-        spaced_text = "C  H E C K M A T E"
+        spaced_text = "C    H    E    C    K    M    A    T    E"
         
         # Draw CHECKMATE text with larger font for better visibility
         bigger_font = pygame.font.SysFont("Arial", 60)  # Increased from 48
@@ -1410,6 +1515,41 @@ class ChessUI:
         """
         # Flip the board when playing as black so player's pieces are at the bottom
         self.board_flipped = (player_color == chess.BLACK)
+
+    def draw_local_multiplayer_color_selection(self, screen, player1_name, player2_name) -> None:
+        """Draw the color selection screen for local multiplayer."""
+        # Draw player name inputs and color selection buttons
+        self.draw_text(screen, "Player 1 Name:", (100, 100))
+        self.draw_text(screen, player1_name, (300, 100))
+        self.draw_text(screen, "Player 2 Name:", (100, 150))
+        self.draw_text(screen, player2_name, (300, 150))
+        self.white_button.draw(screen, "White")
+        self.black_button.draw(screen, "Black")
+        self.random_button.draw(screen, "Random")
+
+    def draw_mode_selection(self, screen) -> None:
+        """Draw the game mode selection screen."""
+        # Draw background
+        self.draw_theme_background(screen, "default")
+        
+        # Draw title
+        title = self.large_font.render("Select Game Mode", True, COLOR_TEXT)
+        screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, 100))
+        
+        # Center-align buttons
+        mouse_pos = pygame.mouse.get_pos()
+        self.player_vs_ai_button.rect.centerx = WINDOW_WIDTH // 2
+        self.local_multiplayer_button.rect.centerx = WINDOW_WIDTH // 2
+        
+        # Update and draw buttons
+        self.player_vs_ai_button.update(mouse_pos)
+        self.player_vs_ai_button.draw(screen)
+        self.local_multiplayer_button.update(mouse_pos)
+        self.local_multiplayer_button.draw(screen)
+        
+        # Draw universal back button
+        self.universal_back_button.update(mouse_pos)
+        self.universal_back_button.draw(screen)
 
 class VolumeSlider:
     def __init__(self, x, y, width, height):

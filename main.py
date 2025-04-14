@@ -28,6 +28,8 @@ GAME_MODE_MENU = 0
 GAME_MODE_PLAY = 1
 GAME_MODE_RESULT = 2
 GAME_MODE_SETTINGS = 3
+GAME_MODE_LOCAL_MULTIPLAYER = 4  # New game mode for local multiplayer
+GAME_MODE_SELECT_MODE = 5  # New mode for selecting game type
 
 class ChessGame:
     def __init__(self) -> None:
@@ -35,6 +37,14 @@ class ChessGame:
         # initialize pygame
         pygame.init()
         pygame.display.set_caption(WINDOW_TITLE)
+
+        # Set window icon
+        icon_path = os.path.join(os.path.dirname(__file__), "assets", "icon.png")
+        if os.path.exists(icon_path):
+            icon_image = pygame.image.load(icon_path)
+            pygame.display.set_icon(icon_image)
+        else:
+            print(f"Warning: Icon file not found at {icon_path}")
 
         # set up display and game clock
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
@@ -106,6 +116,17 @@ class ChessGame:
         # game result
         self.game_result: Optional[str] = None
         self.game_result_message: Optional[str] = None
+
+        # local multiplayer state
+        self.local_multiplayer = False
+        self.player1_name = ""
+        self.player2_name = ""
+        self.player1_color = chess.WHITE
+        self.player2_color = chess.BLACK
+
+        self.show_mode_selection = False  # Track if mode selection screen is active
+        self.show_ai_adjustment = False  # New flag for Player vs AI screen
+        self.selected_player_color = None  # Track the selected color in the Player vs AI screen
 
     def calculate_ai_rating(self, skill_level: int) -> int:
         """
@@ -221,25 +242,67 @@ class ChessGame:
                 self.set_hints(3)
             return
         
+        # handle clicks on the mode selection screen
+        if self.show_mode_selection:
+            if self.ui.player_vs_ai_button.is_clicked(pos):
+                self.show_mode_selection = False
+                self.show_ai_adjustment = True  # Show AI difficulty adjustment screen
+            elif self.ui.local_multiplayer_button.is_clicked(pos):
+                self.show_mode_selection = False
+                self.start_local_multiplayer()  # Proceed to Local Multiplayer setup
+            return
+
+        # Handle clicks on the Player vs AI screen
+        if self.show_ai_adjustment:
+            if self.ui.confirm_button.is_clicked(pos):
+                # Only proceed if a color has been selected
+                if self.selected_player_color is not None:
+                    # Proceed to the game with the selected color
+                    self.show_ai_adjustment = False
+                    
+                    # If random was selected, choose a random color now
+                    if self.selected_player_color == -1:  # -1 represents random
+                        self.selected_player_color = chess.WHITE if random.choice([True, False]) else chess.BLACK
+                    
+                    self.start_game_with_color(self.selected_player_color)  # Transition to gameplay
+                else:
+                    # Show a message that color selection is required
+                    self.ui.show_message = True
+                    self.ui.message_text = "Please select a colour"
+                    self.ui.message_start_time = time.time()
+                return  # Exit early to avoid further processing
+            elif self.ui.difficulty_up_button.is_clicked(pos):
+                # Increase difficulty, but don't go above 20
+                self.ai_skill_level = min(20, self.ai_skill_level + 1)
+                self.ai_rating = self.calculate_ai_rating(self.ai_skill_level)
+            elif self.ui.difficulty_down_button.is_clicked(pos):
+                # Decrease difficulty, but don't go below 0
+                self.ai_skill_level = max(0, self.ai_skill_level - 1)
+                self.ai_rating = self.calculate_ai_rating(self.ai_skill_level)
+            elif self.ui.white_button.is_clicked(pos):
+                self.selected_player_color = chess.WHITE
+                # Clear any error message when a color is selected
+                self.ui.show_message = False
+            elif self.ui.black_button.is_clicked(pos):
+                self.selected_player_color = chess.BLACK
+                # Clear any error message when a color is selected
+                self.ui.show_message = False
+            elif self.ui.random_button.is_clicked(pos):
+                self.selected_player_color = -1  # Use -1 to represent random
+                # Clear any error message when a color is selected
+                self.ui.show_message = False
+            return  # Prevent further processing for clicks in this screen
+
         # handle clicks on the menu screen
         if self.game_mode == GAME_MODE_MENU:
             if self.ui.new_game_button.is_clicked(pos):
-                self.new_game()
+                self.show_mode_selection = True  # Show game mode selection screen
             elif self.ui.settings_button.is_clicked(pos):
                 self.previous_mode = GAME_MODE_MENU
                 self.game_mode = GAME_MODE_SETTINGS
             elif self.ui.quit_button.is_clicked(pos):
                 self.quit()
-            elif self.ui.difficulty_up_button.is_clicked(pos):
-                # increase difficulty, but don't go above 20
-                self.ai_skill_level = min(20, self.ai_skill_level + 1)
-                self.engine.set_difficulty(self.ai_skill_level)
-                self.ai_rating = self.calculate_ai_rating(self.ai_skill_level)
-            elif self.ui.difficulty_down_button.is_clicked(pos):
-                # decrease difficulty, but don't go below 0
-                self.ai_skill_level = max(0, self.ai_skill_level - 1)
-                self.engine.set_difficulty(self.ai_skill_level)
-                self.ai_rating = self.calculate_ai_rating(self.ai_skill_level)
+            # Removed the Local Multiplayer button from the main menu
         
         # if we're in the settings screen, handle those clicks
         elif self.game_mode == GAME_MODE_SETTINGS:
@@ -337,17 +400,20 @@ class ChessGame:
             self.history_board = None
     
     def handle_back_button(self) -> None:
-        """handles what happens when the universal back button is clicked."""
-        if self.game_mode == GAME_MODE_SETTINGS:
-            # go back to the previous mode (menu or game)
+        """Handles what happens when the universal back button is clicked."""
+        if self.show_mode_selection:
+            # Exit mode selection and return to the main menu
+            self.show_mode_selection = False
+        elif self.game_mode == GAME_MODE_SETTINGS:
+            # Go back to the previous mode (menu or game)
             self.game_mode = self.previous_mode
         elif self.game_mode == GAME_MODE_PLAY and self.viewing_history:
-            # exit history view mode
+            # Exit history view mode
             self.viewing_history = False
             self.board.board = self.history_board
             self.history_board = None
         elif self.game_mode == GAME_MODE_PLAY:
-            # for now, just go back to the menu
+            # For now, just go back to the menu
             self.game_mode = GAME_MODE_MENU
         elif self.game_mode == GAME_MODE_RESULT:
             self.game_mode = GAME_MODE_MENU
@@ -450,6 +516,10 @@ class ChessGame:
         # Switch turns
         self.human_turn = not self.human_turn
         
+        if self.local_multiplayer:
+            # Alternate turns between Player 1 and Player 2
+            self.human_color = self.player1_color if self.human_turn else self.player2_color
+
         # Check game state
         self.check_game_end()
     
@@ -576,7 +646,14 @@ class ChessGame:
         self.screen.fill(COLOR_BACKGROUND)
         
         # Draw based on game mode
-        if self.game_mode == GAME_MODE_MENU:
+        if self.show_mode_selection:
+            self.render_mode_selection()  # Render game mode selection screen
+        elif self.show_ai_adjustment:
+            # Reset selected color when entering this screen
+            if self.selected_player_color is None:
+                self.selected_player_color = None  # Reset color selection
+            self.ui.draw_player_vs_ai_screen(self.screen, self.ai_skill_level, self.ai_rating, self.selected_player_color)
+        elif self.game_mode == GAME_MODE_MENU:
             if self.show_color_selection:
                 self.render_color_selection()
             elif self.show_hint_selection:
@@ -593,13 +670,22 @@ class ChessGame:
         # Update display
         pygame.display.flip()
 
+    def render_mode_selection(self) -> None:
+        """Render the game mode selection screen."""
+        self.ui.draw_mode_selection(self.screen)
+
     def render_color_selection(self) -> None:
         """Render the screen for selecting player color."""
         # Draw background with current theme
         self.ui.draw_theme_background(self.screen, self.settings.get_theme())
         
-        # Have the UI draw the color selection interface
-        self.ui.draw_color_selection(self.screen)
+        # Draw the Player vs AI screen if not in local multiplayer mode
+        if not self.local_multiplayer:
+            self.ui.draw_player_vs_ai_screen(self.screen, self.ai_skill_level, self.ai_rating)
+        else:
+            self.ui.draw_local_multiplayer_color_selection(
+                self.screen, self.player1_name, self.player2_name
+            )
 
     def render_hint_selection(self) -> None:
         """Render the screen for selecting the number of hints."""
@@ -661,13 +747,17 @@ class ChessGame:
     
     def new_game(self) -> None:
         """Start a new chess game."""
-        # Show color selection first
-        self.show_color_selection = True
+        self.show_mode_selection = True  # Show mode selection screen
+        self.show_color_selection = False
         self.show_hint_selection = False
         self.color_selected = None
         self.hint_selected = False
-    
-        # Disable other controls until selections are made
+        self.local_multiplayer = False  # Reset local multiplayer state
+
+    def start_local_multiplayer(self) -> None:
+        """Start the local multiplayer setup process."""
+        self.local_multiplayer = True
+        self.show_color_selection = True
         self.game_mode = GAME_MODE_MENU
 
     def start_game_with_color(self, color: chess.Color) -> None:
@@ -696,6 +786,14 @@ class ChessGame:
         if self.engine:
             self.engine.set_difficulty(self.ai_skill_level)
         
+        if self.local_multiplayer:
+            # Assign colors to players
+            self.player1_color = color
+            self.player2_color = chess.BLACK if color == chess.WHITE else chess.WHITE
+            self.human_color = chess.WHITE  # Player 1 always starts
+            self.human_turn = True  # Player 1 starts the game
+            self.hints_remaining = 0  # Disable hints for local multiplayer
+
         # Show hint selection
         self.show_hint_selection = True
         self.show_color_selection = False
