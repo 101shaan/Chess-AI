@@ -31,6 +31,13 @@ GAME_MODE_SETTINGS = 3
 GAME_MODE_LOCAL_MULTIPLAYER = 4  # New game mode for local multiplayer
 GAME_MODE_SELECT_MODE = 5  # New mode for selecting game type
 
+# Chess clock time constraints (in seconds)
+TIME_BULLET = 60       # 1 minute
+TIME_BLITZ_3 = 180     # 3 minutes
+TIME_BLITZ_5 = 300     # 5 minutes
+TIME_RAPID = 600       # 10 minutes
+TIME_UNLIMITED = -1    # No time constraint
+
 class ChessGame:
     def __init__(self) -> None:
         """initialize the chess game and all its components"""
@@ -85,6 +92,14 @@ class ChessGame:
         # color selection state
         self.show_color_selection = False
         self.color_selected = None
+        
+        # local multiplayer state
+        self.show_time_selection = False
+        self.time_constraint = TIME_UNLIMITED
+        self.white_time_remaining = 0
+        self.black_time_remaining = 0
+        self.last_move_time = 0
+        self.current_player = chess.WHITE  # White goes first
 
         # hint system
         self.hints_remaining = 0
@@ -127,6 +142,10 @@ class ChessGame:
         self.show_mode_selection = False  # Track if mode selection screen is active
         self.show_ai_adjustment = False  # New flag for Player vs AI screen
         self.selected_player_color = None  # Track the selected color in the Player vs AI screen
+
+        # promotion selection state
+        self.promotion_move: Optional[chess.Move] = None
+        self.show_promotion_selection = False
 
     def calculate_ai_rating(self, skill_level: int) -> int:
         """
@@ -203,6 +222,31 @@ class ChessGame:
         args:
             pos: the (x, y) position of the mouse click.
         """
+        # Handle promotion selection if active
+        if self.show_promotion_selection:
+            piece_type = self.ui.get_promotion_selection(pos)
+            if piece_type:
+                self.handle_promotion_selection(piece_type)
+            return  # Exit early to avoid further processing
+            
+        # Handle time constraint selection if active
+        if self.show_time_selection:
+            if self.ui.bullet_button.is_clicked(pos):
+                self.set_time_constraint(TIME_BULLET)
+                return
+            elif self.ui.blitz_3_button.is_clicked(pos):
+                self.set_time_constraint(TIME_BLITZ_3)
+                return
+            elif self.ui.blitz_5_button.is_clicked(pos):
+                self.set_time_constraint(TIME_BLITZ_5)
+                return
+            elif self.ui.rapid_button.is_clicked(pos):
+                self.set_time_constraint(TIME_RAPID)
+                return
+            elif self.ui.no_time_button.is_clicked(pos):
+                self.set_time_constraint(TIME_UNLIMITED)
+                return
+
         # first, let's check if the universal back button was clicked
         if self.ui.universal_back_button.is_clicked(pos):
             self.handle_back_button()
@@ -357,6 +401,27 @@ class ChessGame:
             square = self.ui.pos_to_square(pos)
             if square is not None:
                 self.handle_board_click(square)
+                
+        # handle clicks during local multiplayer gameplay
+        elif self.game_mode == GAME_MODE_LOCAL_MULTIPLAYER:
+            # skip if the game over animation is still running
+            if self.game_over_phase > 0:
+                return
+                
+            # check if the in-game settings button was clicked
+            if self.ui.in_game_settings_button.is_clicked(pos):
+                self.previous_mode = GAME_MODE_LOCAL_MULTIPLAYER
+                self.game_mode = GAME_MODE_SETTINGS
+                return
+                
+            # skip if a move is in progress
+            if self.move_in_progress:
+                return
+                
+            # check if the click was on the board
+            square = self.ui.pos_to_square(pos)
+            if square is not None:
+                self.handle_local_multiplayer_board_click(square)
     
     def navigate_move_history(self, direction: int) -> None:
         """
@@ -404,6 +469,11 @@ class ChessGame:
         if self.show_mode_selection:
             # Exit mode selection and return to the main menu
             self.show_mode_selection = False
+            self.game_mode = GAME_MODE_MENU
+        elif self.show_time_selection:
+            # Go back to mode selection from time constraint selection
+            self.show_time_selection = False
+            self.show_mode_selection = True
         elif self.game_mode == GAME_MODE_SETTINGS:
             # Go back to the previous mode (menu or game)
             self.game_mode = self.previous_mode
@@ -414,6 +484,9 @@ class ChessGame:
             self.history_board = None
         elif self.game_mode == GAME_MODE_PLAY:
             # For now, just go back to the menu
+            self.game_mode = GAME_MODE_MENU
+        elif self.game_mode == GAME_MODE_LOCAL_MULTIPLAYER:
+            # Go back to the menu from local multiplayer mode
             self.game_mode = GAME_MODE_MENU
         elif self.game_mode == GAME_MODE_RESULT:
             self.game_mode = GAME_MODE_MENU
@@ -431,7 +504,7 @@ class ChessGame:
         
         # Update global color constants with theme colors
         global COLOR_WHITE, COLOR_BLACK, COLOR_BACKGROUND, COLOR_TEXT
-        global COLOR_BUTTON, COLOR_BUTTON_HOVER, COLOR_HIGHLIGHT, COLOR_MOVE_INDICATOR
+        global COLOR_BUTTON, COLOR_BUTTON_HOVER, COLOR_HIGHLIGHT, COLOR_MOVE_INDICATOR, COLOR_TEXT_LIGHT
         
         COLOR_WHITE = theme_colors["light_square"]
         COLOR_BLACK = theme_colors["dark_square"]
@@ -441,6 +514,7 @@ class ChessGame:
         COLOR_MOVE_INDICATOR = theme_colors["move_indicator"]
         COLOR_BUTTON = theme_colors["button"]
         COLOR_BUTTON_HOVER = theme_colors["button_hover"]
+        COLOR_TEXT_LIGHT = (200, 200, 200)  # Define a light text color
         
         # Set audio volume
         self.audio.set_volume(self.settings.get_volume())
@@ -467,7 +541,12 @@ class ChessGame:
     
     def handle_board_click(self, square: chess.Square) -> None:
         """Handle clicks on the chessboard during gameplay."""
-        # If no square is selected yet
+        # Different handling for local multiplayer mode
+        if self.game_mode == GAME_MODE_LOCAL_MULTIPLAYER:
+            self.handle_local_multiplayer_board_click(square)
+            return
+            
+        # Regular AI vs Human mode
         if self.selected_square is None:
             piece = self.board.board.piece_at(square)
             # Only select squares with pieces of the player's color and only during the player's turn
@@ -485,8 +564,8 @@ class ChessGame:
                 move = chess.Move(self.selected_square, square)
                 # Check if it's a promotion
                 if self.board.is_promotion_move(move):
-                    # Always promote to queen for simplicity
-                    move.promotion = chess.QUEEN
+                    self.show_promotion_menu(move)  # Show promotion menu
+                    return  # Exit early to wait for promotion selection
                 
                 # Execute the move
                 self.make_move(move)
@@ -494,7 +573,117 @@ class ChessGame:
             # Clear selection even if an invalid square was clicked
             self.selected_square = None
             self.highlighted_squares = []
-    
+
+    def set_time_constraint(self, time_seconds: int) -> None:
+        """Set the time constraint for local multiplayer mode and start the game"""
+        self.time_constraint = time_seconds
+        
+        # For unlimited time mode, set time remaining to -1 to indicate no clock should be shown
+        if time_seconds == TIME_UNLIMITED:
+            self.white_time_remaining = -1
+            self.black_time_remaining = -1
+        else:
+            self.white_time_remaining = time_seconds
+            self.black_time_remaining = time_seconds
+            
+        self.show_time_selection = False
+        
+        # Initialize a new game for local multiplayer
+        self.board = GameBoard()
+        self.current_player = chess.WHITE
+        self.selected_square = None
+        self.highlighted_squares = []
+        self.promotion_move = None
+        self.show_promotion_selection = False
+        self.last_move_time = time.time()
+        self.game_mode = GAME_MODE_LOCAL_MULTIPLAYER
+        
+        # Reset the clock tick counter
+        self.clock_tick = 0
+
+    def handle_local_multiplayer_board_click(self, square: chess.Square) -> None:
+        """Handle board clicks for local multiplayer mode"""
+        if self.selected_square is None:
+            piece = self.board.board.piece_at(square)
+            # Only select squares with pieces of the current player's color
+            if piece and piece.color == self.current_player:
+                self.selected_square = square
+                # Highlight legal moves
+                self.highlighted_squares = [
+                    move.to_square for move in self.board.board.legal_moves
+                    if move.from_square == square
+                ]
+        else:
+            # If a square is already selected
+            if square in self.highlighted_squares:
+                # Make the move
+                move = chess.Move(self.selected_square, square)
+                # Check if it's a promotion
+                if self.board.is_promotion_move(move):
+                    self.show_promotion_menu(move)  # Show promotion menu
+                    return  # Exit early to wait for promotion selection
+                
+                # Execute the move for local multiplayer
+                self.make_local_multiplayer_move(move)
+            
+            # Clear selection even if an invalid square was clicked
+            self.selected_square = None
+            self.highlighted_squares = []
+
+    def make_local_multiplayer_move(self, move: chess.Move) -> None:
+        """Execute a move in local multiplayer mode"""
+        # Make the move
+        if self.board.make_move(move):
+            # Start animation
+            self.ui.animate_move(move, self.board.board)
+            self.move_in_progress = True
+            
+            # Switch player (using chess.WHITE/BLACK instead of boolean)
+            self.current_player = chess.BLACK if self.current_player == chess.WHITE else chess.WHITE
+            
+            # Reset the last move time to start the clock for the next player
+            # Only update the clock if we're not in unlimited time mode
+            if self.time_constraint != TIME_UNLIMITED:
+                self.last_move_time = time.time()
+            
+            # Play move sound
+            self.audio.play("move")
+            
+            # Check for game end
+            self.check_game_end()
+
+    def render_local_multiplayer_game(self) -> None:
+        """Render the local multiplayer game interface with chess clocks"""
+        self.ui.draw_local_multiplayer_game(
+            self.screen,
+            self.board,
+            self.selected_square,
+            self.highlighted_squares,
+            self.current_player,
+            self.white_time_remaining,
+            self.black_time_remaining,
+            self.settings.get_theme()
+        )
+            
+    def show_promotion_menu(self, move: chess.Move) -> None:
+        """Show a menu to select the promotion piece."""
+        self.promotion_move = move
+        self.show_promotion_selection = True  # Enable promotion selection mode
+
+    def handle_promotion_selection(self, piece_type: chess.PieceType) -> None:
+        """Handle the player's promotion selection."""
+        if self.promotion_move:
+            self.promotion_move.promotion = piece_type  # Set the selected promotion piece
+            
+            # Check if in local multiplayer mode
+            if self.game_mode == GAME_MODE_LOCAL_MULTIPLAYER:
+                self.make_local_multiplayer_move(self.promotion_move)  # Execute move for local multiplayer
+            else:
+                self.make_move(self.promotion_move)  # Execute move for AI vs human
+                
+            self.promotion_move = None
+            self.show_promotion_selection = False  # Exit promotion selection mode
+
     def make_move(self, move: chess.Move) -> None:
         """Execute a move on the board."""
         # Make the move on the board
@@ -538,6 +727,37 @@ class ChessGame:
                     self.ai_thinking = True
                     self.last_ai_move_time = time.time()
                     self.engine.get_move(self.board.board, self.ai_skill_level)
+        
+        # Update clock in local multiplayer mode only when no animations are running
+        # and only when we're not in unlimited time mode (time_constraint != TIME_UNLIMITED)
+        if self.game_mode == GAME_MODE_LOCAL_MULTIPLAYER and self.time_constraint != TIME_UNLIMITED and not self.move_in_progress:
+            # Only update if time values are valid (not -1 which indicates unlimited time)
+            if self.white_time_remaining >= 0 and self.black_time_remaining >= 0:
+                current_time = time.time()
+                # Only update the clock once per second instead of using frame-based counting
+                if current_time - self.last_move_time >= 1.0:  # Exactly 1 second has passed
+                    self.last_move_time = current_time
+                    # Subtract time from the active player's clock
+                    if self.current_player == chess.WHITE:
+                        self.white_time_remaining = max(0, self.white_time_remaining - 1)
+                        # Check for time out
+                        if self.white_time_remaining == 0:
+                            self.game_result = "timeout"
+                            self.game_result_message = "Black Wins by Timeout!"
+                            self.game_over_phase = 0  # Skip animation for timeout
+                            self.game_mode = GAME_MODE_RESULT
+                            # Play game over sound
+                            self.audio.play('game_over')
+                    else:
+                        self.black_time_remaining = max(0, self.black_time_remaining - 1)
+                        # Check for time out
+                        if self.black_time_remaining == 0:
+                            self.game_result = "timeout"
+                            self.game_result_message = "White Wins by Timeout!"
+                            self.game_over_phase = 0  # Skip animation for timeout
+                            self.game_mode = GAME_MODE_RESULT
+                            # Play game over sound
+                            self.audio.play('game_over')
         
         # If AI is thinking, check if move is ready
         if self.ai_thinking and self.game_mode == GAME_MODE_PLAY:
@@ -601,9 +821,16 @@ class ChessGame:
                     if game_state_dict['is_checkmate']:
                         winner_color = chess.WHITE if self.board.board.outcome().winner else chess.BLACK
                         winner_name = "White" if winner_color == chess.WHITE else "Black"
-                        player_won = (winner_color == self.human_color)
-                        self.game_result = "checkmate"
-                        self.game_result_message = f"You Win!" if player_won else "You Lose!"
+                        
+                        # Different messages for local multiplayer and AI modes
+                        if self.game_mode == GAME_MODE_LOCAL_MULTIPLAYER:
+                            self.game_result = "checkmate"
+                            self.game_result_message = f"{winner_name} Wins by Checkmate!"
+                        else:
+                            # Player vs AI mode
+                            player_won = (winner_color == self.human_color)
+                            self.game_result = "checkmate"
+                            self.game_result_message = f"You Win!" if player_won else "You Lose!"
                     else:
                         # It's a draw
                         self.game_result = "draw"
@@ -648,6 +875,8 @@ class ChessGame:
         # Draw based on game mode
         if self.show_mode_selection:
             self.render_mode_selection()  # Render game mode selection screen
+        elif self.show_time_selection:
+            self.render_time_selection()  # Render time constraint selection screen
         elif self.show_ai_adjustment:
             # Reset selected color when entering this screen
             if self.selected_player_color is None:
@@ -662,6 +891,14 @@ class ChessGame:
                 self.render_menu()
         elif self.game_mode == GAME_MODE_PLAY:
             self.render_game()
+            # Draw promotion menu on top of the game if needed
+            if self.show_promotion_selection:
+                self.ui.draw_promotion_menu(self.screen, self.human_color)
+        elif self.game_mode == GAME_MODE_LOCAL_MULTIPLAYER:
+            self.render_local_multiplayer_game()
+            # Draw promotion menu on top of the game if needed
+            if self.show_promotion_selection:
+                self.ui.draw_promotion_menu(self.screen, self.current_player)
         elif self.game_mode == GAME_MODE_RESULT:
             self.render_result()
         elif self.game_mode == GAME_MODE_SETTINGS:
@@ -673,6 +910,10 @@ class ChessGame:
     def render_mode_selection(self) -> None:
         """Render the game mode selection screen."""
         self.ui.draw_mode_selection(self.screen)
+        
+    def render_time_selection(self) -> None:
+        """Render the time constraint selection screen for local multiplayer."""
+        self.ui.draw_time_constraint_selection(self.screen)
 
     def render_color_selection(self) -> None:
         """Render the screen for selecting player color."""
@@ -697,6 +938,9 @@ class ChessGame:
 
     def render_game(self) -> None:
         """Render the chessboard and in-game UI."""
+        # First draw the theme background
+        self.ui.draw_theme_background(self.screen, self.settings.get_theme())
+        
         # Use the updated draw_game method with theme support
         self.ui.draw_game(
             self.screen,
@@ -714,15 +958,42 @@ class ChessGame:
         
         # Draw game over animation if in progress
         if self.game_over_phase > 0:
+            # Animation handled in render_local_multiplayer_game method
+            pass
+            
+    def render_local_multiplayer_game(self) -> None:
+        """Render the local multiplayer game interface with chess clocks."""
+        # First draw the theme background
+        self.ui.draw_theme_background(self.screen, self.settings.get_theme())
+        
+        # Draw the chessboard with current theme
+        self.ui.draw_local_multiplayer_game(
+            self.screen,
+            self.board,
+            self.selected_square,
+            self.highlighted_squares,
+            self.current_player,
+            self.white_time_remaining,
+            self.black_time_remaining,
+            self.settings.get_theme()
+        )
+        
+        # If there's a time constraint, show it in the game window title
+        if self.time_constraint != TIME_UNLIMITED:
+            mins, secs = divmod(self.time_constraint, 60)
+            pygame.display.set_caption(f"{WINDOW_TITLE} - Local Multiplayer ({mins}:{secs:02d} per player)")
+        
+        # Draw game over animation if in progress
+        if self.game_over_phase > 0:
             if self.game_over_phase == 1:
                 # Draw CHECKMATE text overlay
                 self.ui.draw_checkmate_overlay(self.screen)
             elif self.game_over_phase == 2:
-                # Draw WIN/LOSE text overlay
-                is_winner = False
+                # For local multiplayer mode we show which color won
                 if self.board.board.outcome():
-                    is_winner = (self.board.board.outcome().winner == self.human_color)
-                self.ui.draw_result_overlay(self.screen, is_winner)
+                    winner_color = chess.WHITE if self.board.board.outcome().winner else chess.BLACK
+                    winner_text = "White Wins!" if winner_color == chess.WHITE else "Black Wins!"
+                    self.ui.draw_text(self.screen, winner_text, 60, (WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2), COLOR_TEXT_LIGHT)
     
     def render_menu(self) -> None:
         """Render the main menu screen."""
@@ -734,8 +1005,11 @@ class ChessGame:
         # Clear screen
         self.screen.fill(COLOR_BACKGROUND)
         
-        # Draw the result UI
-        self.ui.draw_game_result(self.screen, self.game_result_message, self.ai_rating)
+        # Draw the result UI - don't show AI rating for local multiplayer games
+        if self.local_multiplayer:
+            self.ui.draw_game_result(self.screen, self.game_result_message, None)  # Pass None to hide AI rating
+        else:
+            self.ui.draw_game_result(self.screen, self.game_result_message, self.ai_rating)
 
     def render_settings(self) -> None:
         """Render the settings screen."""
@@ -744,21 +1018,100 @@ class ChessGame:
         
         # Draw the settings UI
         self.ui.draw_settings(self.screen, self.settings, return_to_game)
+        
+    def handle_back_button(self) -> None:
+        """Handles what happens when the universal back button is clicked."""
+        # Handle back button for different screens
+        if self.show_mode_selection:
+            # Return to main menu from mode selection
+            self.show_mode_selection = False
+            self.game_mode = GAME_MODE_MENU
+        elif self.show_time_selection:
+            # Go back to mode selection from time selection
+            self.show_time_selection = False
+            self.show_mode_selection = True
+        elif self.show_ai_adjustment:
+            # Go back to mode selection from AI difficulty adjustment
+            self.show_ai_adjustment = False
+            self.show_mode_selection = True
+        elif self.show_color_selection:
+            # Go back to appropriate previous screen
+            self.show_color_selection = False
+            if self.local_multiplayer:
+                self.show_time_selection = True
+            else:
+                self.show_mode_selection = True
+        elif self.show_hint_selection:
+            # Go back to color selection from hint selection
+            self.show_hint_selection = False
+            self.show_color_selection = True
+        elif self.game_mode == GAME_MODE_SETTINGS:
+            # Return to previous mode from settings
+            self.game_mode = self.previous_mode
+        elif self.game_mode == GAME_MODE_RESULT:
+            # Return to menu from result screen
+            self.game_mode = GAME_MODE_MENU
+        elif self.game_mode == GAME_MODE_LOCAL_MULTIPLAYER:
+            # Return to main menu from local multiplayer game
+            self.game_mode = GAME_MODE_MENU
     
     def new_game(self) -> None:
         """Start a new chess game."""
+        # Reset game state variables
+        self.game_mode = GAME_MODE_MENU
+        self.previous_mode = GAME_MODE_MENU
+        self.selected_square = None
+        self.highlighted_squares = []
+        self.human_turn = True
+        self.human_color = chess.WHITE
+        self.ai_thinking = False
+        self.move_in_progress = False
+        
+        # Reset move history navigation
+        self.viewing_history = False
+        self.history_position = 0
+        self.history_board = None
+        
+        # Reset selection screens
         self.show_mode_selection = True  # Show mode selection screen
         self.show_color_selection = False
         self.show_hint_selection = False
+        self.show_time_selection = False
         self.color_selected = None
         self.hint_selected = False
-        self.local_multiplayer = False  # Reset local multiplayer state
+        
+        # Reset local multiplayer state
+        self.local_multiplayer = False
+        self.time_constraint = TIME_UNLIMITED
+        self.white_time_remaining = -1
+        self.black_time_remaining = -1
+        self.current_player = chess.WHITE
+        
+        # Reset board orientation to default (white closest to user)
+        self.ui.set_board_orientation(chess.WHITE)
+        
+        # Reset hint system
+        self.hints_remaining = 0
+        self.hint_move = None
+        
+        # Reset game over animation
+        self.game_over_phase = 0
+        
+        # Reset game result
+        self.game_result = None
+        self.game_result_message = None
 
     def start_local_multiplayer(self) -> None:
         """Start the local multiplayer setup process."""
         self.local_multiplayer = True
-        self.show_color_selection = True
-        self.game_mode = GAME_MODE_MENU
+        self.show_time_selection = True  # Show time constraint selection first
+        # Hide other selection screens
+        self.show_color_selection = False
+        self.show_hint_selection = False
+        self.show_mode_selection = False
+        
+        # Reset board orientation to default (white closest to user)
+        self.ui.set_board_orientation(chess.WHITE)
 
     def start_game_with_color(self, color: chess.Color) -> None:
         """Begin a new game with the selected player color."""
@@ -793,10 +1146,12 @@ class ChessGame:
             self.human_color = chess.WHITE  # Player 1 always starts
             self.human_turn = True  # Player 1 starts the game
             self.hints_remaining = 0  # Disable hints for local multiplayer
-
-        # Show hint selection
-        self.show_hint_selection = True
-        self.show_color_selection = False
+            # Skip hint selection for local multiplayer
+            self.game_mode = GAME_MODE_LOCAL_MULTIPLAYER
+        else:
+            # Show hint selection for Player vs AI mode
+            self.show_hint_selection = True
+            self.show_color_selection = False
 
     def set_hints(self, num_hints: int) -> None:
         """Set the number of hints available to the player."""

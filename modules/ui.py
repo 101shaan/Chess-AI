@@ -435,16 +435,16 @@ class ChessUI:
                 'N': os.path.join(pieces_dir, "black_knight.png"),
                 'B': os.path.join(pieces_dir, "black_bishop.png"),
                 'R': os.path.join(pieces_dir, "black_rook.png"),
-                'Q': os.path.join(pieces_dir, "black_queen.png"),
-                'K': os.path.join(pieces_dir, "black_king.png"),
+                'Q': os.path.join(pieces_dir, "black_king.png"),  # FIXED: Swapped king and queen images
+                'K': os.path.join(pieces_dir, "black_queen.png"),  # FIXED: Swapped king and queen images
                 
                 # Black pieces (lowercase in python-chess) - using the "white_" images which actually show black pieces
                 'p': os.path.join(pieces_dir, "white_pawn.png"),
                 'n': os.path.join(pieces_dir, "white_knight.png"),
                 'b': os.path.join(pieces_dir, "white_bishop.png"),
                 'r': os.path.join(pieces_dir, "white_rook.png"),
-                'q': os.path.join(pieces_dir, "white_queen.png"),
-                'k': os.path.join(pieces_dir, "white_king.png")
+                'q': os.path.join(pieces_dir, "white_king.png"),   # FIXED: Swapped king and queen images
+                'k': os.path.join(pieces_dir, "white_queen.png")   # FIXED: Swapped king and queen images
             }
             
             # Load each piece image
@@ -920,6 +920,10 @@ class ChessUI:
             self.hint_button.update(mouse_pos)
             self.hint_button.draw(surface)
         
+        # Draw move history and navigation buttons - only for Player vs AI mode
+        # Draw move history
+        self.draw_move_history(surface, board_state)
+        
         # Draw move history navigation buttons
         self.move_back_button.update(mouse_pos)
         self.move_back_button.draw(surface)
@@ -1323,7 +1327,7 @@ class ChessUI:
         ai_surface = self.small_font.render(ai_text, True, COLOR_TEXT)
         surface.blit(ai_surface, (20, 20))
     
-    def draw_game_result(self, surface: pygame.Surface, result_message: str, ai_rating: int) -> None:
+    def draw_game_result(self, surface: pygame.Surface, result_message: str, ai_rating: Optional[int] = None) -> None:
         """draws the game result screen."""
         # Draw semi-transparent overlay
         overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
@@ -1336,14 +1340,15 @@ class ChessUI:
                     (WINDOW_WIDTH // 2 - result_surface.get_width() // 2, 
                      WINDOW_HEIGHT // 2 - 100))
         
-        # Draw updated AI rating
-        ai_surface = self.medium_font.render(
-            f"AI Rating: {ai_rating}", 
-            True, (255, 255, 255)
-        )
-        surface.blit(ai_surface, 
-                    (WINDOW_WIDTH // 2 - ai_surface.get_width() // 2, 
-                     WINDOW_HEIGHT // 2))
+        # Draw updated AI rating only for AI games (not for local multiplayer)
+        if ai_rating is not None:
+            ai_surface = self.medium_font.render(
+                f"AI Rating: {ai_rating}", 
+                True, (255, 255, 255)
+            )
+            surface.blit(ai_surface, 
+                        (WINDOW_WIDTH // 2 - ai_surface.get_width() // 2, 
+                         WINDOW_HEIGHT // 2))
         
         # Draw menu button
         mouse_pos = pygame.mouse.get_pos()
@@ -1516,16 +1521,272 @@ class ChessUI:
         # Flip the board when playing as black so player's pieces are at the bottom
         self.board_flipped = (player_color == chess.BLACK)
 
-    def draw_local_multiplayer_color_selection(self, screen, player1_name, player2_name) -> None:
-        """Draw the color selection screen for local multiplayer."""
-        # Draw player name inputs and color selection buttons
-        self.draw_text(screen, "Player 1 Name:", (100, 100))
-        self.draw_text(screen, player1_name, (300, 100))
-        self.draw_text(screen, "Player 2 Name:", (100, 150))
-        self.draw_text(screen, player2_name, (300, 150))
-        self.white_button.draw(screen, "White")
-        self.black_button.draw(screen, "Black")
-        self.random_button.draw(screen, "Random")
+    def draw_text(self, surface: pygame.Surface, text: str, position: Tuple[int, int], font=None, color=None) -> None:
+        """
+        Draw text on the surface at the specified position
+        
+        Args:
+            surface: Surface to draw on
+            text: Text to draw
+            position: (x, y) position to draw at
+            font: Font to use (defaults to medium_font)
+            color: Color to use (defaults to COLOR_TEXT)
+        """
+        font = font or self.medium_font
+        color = color or COLOR_TEXT
+        text_surface = font.render(text, True, color)
+        surface.blit(text_surface, position)
+
+    def draw_time_constraint_selection(self, surface: pygame.Surface) -> None:
+        """Draw the time constraint selection screen for local multiplayer."""
+        # Draw background
+        self.draw_theme_background(surface, "default")
+        
+        # Draw title
+        title = self.large_font.render("Select Time Constraint", True, COLOR_TEXT)
+        surface.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, 60))
+        
+        # Load icons
+        icons = {}
+        icon_paths = {
+            "bullet": os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "time_limit", "bullet_chess.png"),
+            "blitz": os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "time_limit", "blitz_chess.png"),
+            "rapid": os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "time_limit", "rapid_chess.png"),
+            "no_time": os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "time_limit", "no_time_constraint.png")
+        }
+        
+        for key, path in icon_paths.items():
+            if os.path.exists(path):
+                icons[key] = pygame.image.load(path)
+                icons[key] = pygame.transform.scale(icons[key], (40, 40))
+            else:
+                print(f"Warning: Icon {path} not found")
+        
+        # Calculate positions
+        center_x = WINDOW_WIDTH // 2
+        button_width = 300
+        button_height = 60
+        button_spacing = 20
+        start_y = 120
+        
+        # Create buttons if they don't exist
+        if not hasattr(self, 'bullet_button'):
+            self.bullet_button = Button(
+                center_x - button_width // 2,
+                start_y,
+                button_width,
+                button_height,
+                "Bullet Chess - 1 min"
+            )
+        
+        if not hasattr(self, 'blitz_3_button'):
+            self.blitz_3_button = Button(
+                center_x - button_width // 2,
+                start_y + button_height + button_spacing,
+                button_width,
+                button_height,
+                "Blitz Chess - 3 min"
+            )
+            
+        if not hasattr(self, 'blitz_5_button'):
+            self.blitz_5_button = Button(
+                center_x - button_width // 2,
+                start_y + (button_height + button_spacing) * 2,
+                button_width,
+                button_height,
+                "Blitz Chess - 5 min"
+            )
+            
+        if not hasattr(self, 'rapid_button'):
+            self.rapid_button = Button(
+                center_x - button_width // 2,
+                start_y + (button_height + button_spacing) * 3,
+                button_width,
+                button_height,
+                "Rapid Chess - 10 min"
+            )
+            
+        if not hasattr(self, 'no_time_button'):
+            self.no_time_button = Button(
+                center_x - button_width // 2,
+                start_y + (button_height + button_spacing) * 4,
+                button_width,
+                button_height,
+                "No Time Constraint"
+            )
+        
+        # Update and draw buttons
+        mouse_pos = pygame.mouse.get_pos()
+        
+        self.bullet_button.update(mouse_pos)
+        self.bullet_button.draw(surface)
+        
+        self.blitz_3_button.update(mouse_pos)
+        self.blitz_3_button.draw(surface)
+        
+        self.blitz_5_button.update(mouse_pos)
+        self.blitz_5_button.draw(surface)
+        
+        self.rapid_button.update(mouse_pos)
+        self.rapid_button.draw(surface)
+        
+        self.no_time_button.update(mouse_pos)
+        self.no_time_button.draw(surface)
+        
+        # Draw icons next to buttons if loaded
+        if "bullet" in icons:
+            surface.blit(icons["bullet"], (self.bullet_button.rect.x - 50, self.bullet_button.rect.centery - 20))
+        
+        if "blitz" in icons:
+            surface.blit(icons["blitz"], (self.blitz_3_button.rect.x - 50, self.blitz_3_button.rect.centery - 20))
+            surface.blit(icons["blitz"], (self.blitz_5_button.rect.x - 50, self.blitz_5_button.rect.centery - 20))
+        
+        if "rapid" in icons:
+            surface.blit(icons["rapid"], (self.rapid_button.rect.x - 50, self.rapid_button.rect.centery - 20))
+        
+        if "no_time" in icons:
+            surface.blit(icons["no_time"], (self.no_time_button.rect.x - 50, self.no_time_button.rect.centery - 20))
+
+        # Draw universal back button
+        self.universal_back_button.update(mouse_pos)
+        self.universal_back_button.draw(surface)
+
+    def draw_local_multiplayer_game(self, surface: pygame.Surface, board_state: Any, 
+                               selected_square: Optional[chess.Square], 
+                               highlighted_squares: List[chess.Square],
+                               current_player: chess.Color,
+                               white_time: int, black_time: int,
+                               current_theme: str = "default") -> None:
+        """Draw the local multiplayer game interface with chess clocks"""
+        # Draw the board and pieces
+        self.draw_board(surface, board_state, current_theme)
+        self.draw_board_labels(surface)
+        
+        # Draw highlights
+        self.draw_highlights(surface, selected_square, highlighted_squares)
+        
+        # Draw captured pieces with proper labels for local multiplayer
+        self.draw_local_multiplayer_captured_pieces(surface, board_state, current_player)
+        
+        # Only draw clocks if we're not in unlimited time mode (white_time and black_time will be -1)
+        if white_time >= 0 and black_time >= 0:
+            # Draw player clocks
+            white_mins, white_secs = divmod(white_time, 60)
+            black_mins, black_secs = divmod(black_time, 60)
+            
+            # Format time strings without "White:" and "Black:" prefixes
+            white_time_str = f"{white_mins:02d}:{white_secs:02d}"
+            black_time_str = f"{black_mins:02d}:{black_secs:02d}"
+            
+            # Determine colors based on current player
+            white_color = (50, 200, 50) if current_player == chess.WHITE else COLOR_TEXT
+            black_color = (50, 200, 50) if current_player == chess.BLACK else COLOR_TEXT
+            
+            # Create bold font for time display
+            bold_font = pygame.font.SysFont("Arial", FONT_SIZE_MEDIUM, bold=True)
+            
+            # Draw time indicators with bold font
+            white_time_surface = bold_font.render(white_time_str, True, white_color)
+            black_time_surface = bold_font.render(black_time_str, True, black_color)
+            
+            # Position time indicators on the right side of the board
+            # White at bottom, Black at top
+            right_margin = WINDOW_WIDTH - 100
+            surface.blit(white_time_surface, (right_margin, WINDOW_HEIGHT - 100))
+            surface.blit(black_time_surface, (right_margin, 100))
+        
+        # Draw current player indicator
+        turn_text = "White's Turn" if current_player == chess.WHITE else "Black's Turn"
+        turn_surface = self.medium_font.render(turn_text, True, COLOR_TEXT)
+        surface.blit(turn_surface, (BOARD_OFFSET_X + BOARD_SIZE + 20, 50))
+        
+        # Draw in-game settings button
+        mouse_pos = pygame.mouse.get_pos()
+        self.in_game_settings_button.update(mouse_pos)
+        self.in_game_settings_button.draw(surface)
+        
+        # Draw universal back button
+        self.universal_back_button.update(mouse_pos)
+        self.universal_back_button.draw(surface)
+        
+    def draw_local_multiplayer_captured_pieces(self, surface: pygame.Surface, board_state: Any, player_color: chess.Color) -> None:
+        """Draw captured pieces with proper labels for local multiplayer mode"""
+        # Get captured pieces
+        white_captured = board_state.get_captured_pieces(chess.WHITE)
+        black_captured = board_state.get_captured_pieces(chess.BLACK)
+        
+        # Draw labels for captured pieces
+        white_label = self.small_font.render("Captured by White", True, COLOR_TEXT)
+        black_label = self.small_font.render("Captured by Black", True, COLOR_TEXT)
+        
+        # Position for captured pieces display
+        white_label_pos = (BOARD_OFFSET_X + BOARD_SIZE + 20, 200)
+        black_label_pos = (BOARD_OFFSET_X + BOARD_SIZE + 20, 300)
+        
+        # Draw the labels
+        surface.blit(white_label, white_label_pos)
+        surface.blit(black_label, black_label_pos)
+        
+        # Draw the captured pieces
+        piece_size = 30
+        spacing = 5
+        
+        # Helper function to get piece symbol
+        def get_piece_symbol(piece):
+            # Convert piece to symbol (e.g., white pawn -> 'P', black knight -> 'n')
+            symbols = {
+                chess.PAWN: 'P', 
+                chess.KNIGHT: 'N', 
+                chess.BISHOP: 'B',
+                chess.ROOK: 'R', 
+                chess.QUEEN: 'Q', 
+                chess.KING: 'K'
+            }
+            symbol = symbols.get(piece.piece_type, '')
+            # Make lowercase for black pieces
+            if piece.color == chess.BLACK:
+                symbol = symbol.lower()
+            return symbol
+        
+        # Draw white's captured pieces
+        for i, piece in enumerate(white_captured):
+            col = i % 8
+            row = i // 8
+            x = white_label_pos[0] + col * (piece_size + spacing)
+            y = white_label_pos[1] + 20 + row * (piece_size + spacing)
+            
+            # Get the piece image
+            try:
+                symbol = get_piece_symbol(piece)
+                if symbol in self.piece_images:
+                    piece_img = self.piece_images[symbol]
+                    piece_img = pygame.transform.scale(piece_img, (piece_size, piece_size))
+                    surface.blit(piece_img, (x, y))
+                else:
+                    raise KeyError(f"Symbol {symbol} not found in piece_images")
+            except KeyError as e:
+                print(f"Warning: {e}")
+                continue
+        
+        # Draw black's captured pieces
+        for i, piece in enumerate(black_captured):
+            col = i % 8
+            row = i // 8
+            x = black_label_pos[0] + col * (piece_size + spacing)
+            y = black_label_pos[1] + 20 + row * (piece_size + spacing)
+            
+            # Get the piece image
+            try:
+                symbol = get_piece_symbol(piece)
+                if symbol in self.piece_images:
+                    piece_img = self.piece_images[symbol]
+                    piece_img = pygame.transform.scale(piece_img, (piece_size, piece_size))
+                    surface.blit(piece_img, (x, y))
+                else:
+                    raise KeyError(f"Symbol {symbol} not found in piece_images")
+            except KeyError as e:
+                print(f"Warning: {e}")
+                continue
 
     def draw_mode_selection(self, screen) -> None:
         """Draw the game mode selection screen."""
@@ -1550,6 +1811,71 @@ class ChessUI:
         # Draw universal back button
         self.universal_back_button.update(mouse_pos)
         self.universal_back_button.draw(screen)
+
+    def draw_promotion_menu(self, surface: pygame.Surface, player_color: chess.Color) -> None:
+        """Draw the promotion selection menu."""
+        menu_width = 300
+        menu_height = 100
+        menu_x = (WINDOW_WIDTH - menu_width) // 2
+        menu_y = (WINDOW_HEIGHT - menu_height) // 2
+
+        # Draw menu background
+        pygame.draw.rect(surface, COLOR_BACKGROUND, (menu_x, menu_y, menu_width, menu_height))
+        pygame.draw.rect(surface, COLOR_TEXT, (menu_x, menu_y, menu_width, menu_height), 2)
+
+        # Draw promotion options
+        piece_types = [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT]
+        piece_names = ["Queen", "Rook", "Bishop", "Knight"]
+        piece_images = ["Q", "R", "B", "N"] if player_color == chess.WHITE else ["q", "r", "b", "n"]
+
+        button_width = menu_width // len(piece_types)
+        for i, (piece_type, name, image_key) in enumerate(zip(piece_types, piece_names, piece_images)):
+            button_x = menu_x + i * button_width
+            button_rect = pygame.Rect(button_x, menu_y, button_width, menu_height)
+
+            # Draw button background
+            pygame.draw.rect(surface, COLOR_BUTTON, button_rect)
+            pygame.draw.rect(surface, COLOR_TEXT, button_rect, 2)
+
+            # Draw piece image
+            if image_key in self.piece_images:
+                piece_image = self.piece_images[image_key]
+                piece_rect = piece_image.get_rect(center=button_rect.center)
+                surface.blit(piece_image, piece_rect)
+
+            # Draw piece name
+            text_surface = self.medium_font.render(name, True, COLOR_TEXT)
+            text_rect = text_surface.get_rect(center=(button_x + button_width // 2, menu_y + menu_height - 20))
+            surface.blit(text_surface, text_rect)
+
+    def get_promotion_selection(self, pos: Tuple[int, int]) -> Optional[chess.PieceType]:
+        """
+        Get the selected promotion piece based on the mouse click.
+
+        Args:
+            pos: The (x, y) position of the mouse click.
+
+        Returns:
+            The selected chess.PieceType or None if no selection was made.
+        """
+        menu_width = 300
+        menu_height = 100
+        menu_x = (WINDOW_WIDTH - menu_width) // 2
+        menu_y = (WINDOW_HEIGHT - menu_height) // 2
+
+        # Define promotion options
+        piece_types = [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT]
+        button_width = menu_width // len(piece_types)
+
+        for i, piece_type in enumerate(piece_types):
+            button_x = menu_x + i * button_width
+            button_rect = pygame.Rect(button_x, menu_y, button_width, menu_height)
+            if button_rect.collidepoint(pos):
+                return piece_type
+
+        return None
+
+    # Second implementation of draw_local_multiplayer_captured_pieces was removed
 
 class VolumeSlider:
     def __init__(self, x, y, width, height):
