@@ -61,25 +61,12 @@ Run the game with:
 python main.py
 ```
 
-### Controls
-- Mouse: Select and move pieces
-- Escape: Return to menu
-- R: Restart game
-- Z: Undo last move (when playing against AI)
 
 ## Game Modes
 
 1. **Player vs AI**: Play against the Stockfish chess engine with adaptive difficulty
-2. **Player vs Player**: Play against another human on the same computer
+2. **Local mutiplayer**: Play against another human on the same computer
 3. **Practice Mode**: Play with move suggestions and hints
-
-## ELO Rating System
-
-The game includes an ELO rating system that:
-- Tracks player rating (starting at 1200)
-- Adjusts AI difficulty based on player performance
-- Records game history and rating changes
-- Provides performance statistics
 
 ## Customization
 
